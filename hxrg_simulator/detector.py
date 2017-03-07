@@ -125,14 +125,16 @@ class detector(object):
             
         return Dark_data_cube
 
-    def take_exposure(self,incident_flux,flux_scale= None,itime=0,outputfile=None):
+    def take_exposure(self,incident_flux_const,incident_flux_var=0,flux_scale= None,itime=0,outputfile=None):
         """ Returns exposure data cube when photons hit at incident_flux * flux_scale(time)
         Input:
-             incident_flux: The flux at which electrons are getting created in each pixel (e-/s/pix).
+             incident_flux_const: The constant flux [unit: rate at which electrons are getting created in each pixel (e-/s/pix).]
+                          User should multiply with gain and QE for getting this input from photon rate
+             incident_flux_var: The time variable flux [unit: rate at which electrons are getting created in each pixel (e-/s/pix).]
                           User should multiply with gain and QE for getting this input from photon rate
 
              flux_scale(time): function which returns the scale factor for the flux per pixel 
-                               as a function of time.
+                               as a function of time. This will be multiplied to incident_flux_var
                          default is a constant aperture scaling of 1 for the flux rate
                          ie. flux_scale = lambda x:np.ones(x.shape)
 
@@ -157,7 +159,7 @@ class detector(object):
         # cumultatively add the effective itime for each pixel along time axis
         itime_perpixel = np.cumsum(itime_perpixel,axis=0)
 
-        flux_rate_cube = incident_flux * flux_scale(itime_perpixel)
+        flux_rate_cube = incident_flux_const + incident_flux_var * flux_scale(itime_perpixel)
         
         Effective_eflux = self.set_reference_pixels_zero(flux_rate_cube + self.DP.dark_current)
         # Calculate output data cube
