@@ -8,7 +8,7 @@ import numpy as np
 from scipy import ndimage
 
 
-class detector(object):
+class Detector(object):
     """ This object is the HxRG detector.
     methods:
         take_dark: returns a dark cube readout
