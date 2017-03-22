@@ -125,18 +125,18 @@ class Detector(object):
             
         return Dark_data_cube
 
-    def take_exposure(self,incident_flux_const,incident_flux_var=0,flux_scale= None,itime=0,outputfile=None):
+    def take_exposure(self, incident_const_flux, incident_var_fluxlist=None, var_flux_funclist= None, itime=0, outputfile=None):
         """ Returns exposure data cube when photons hit at incident_flux * flux_scale(time)
         Input:
-             incident_flux_const: The constant flux [unit: rate at which electrons are getting created in each pixel (e-/s/pix).]
-                          User should multiply with gain and QE for getting this input from photon rate
-             incident_flux_var: The time variable flux [unit: rate at which electrons are getting created in each pixel (e-/s/pix).]
-                          User should multiply with gain and QE for getting this input from photon rate
+             incident_const_flux: The constant flux frame [unit: rate at which electrons are getting created in each pixel (e-/s/pix).]
+                          User should multiply with QE for getting this input from photon rate
+             incident_var_fluxlist: list of time variable flux frames [unit: rate at which electrons are getting created in each pixel (e-/s/pix).]
+                          User should multiply with QE for getting this input from photon rate
 
-             flux_scale(time): function which returns the scale factor for the flux per pixel 
-                               as a function of time. This will be multiplied to incident_flux_var
-                         default is a constant aperture scaling of 1 for the flux rate
-                         ie. flux_scale = lambda x:np.ones(x.shape)
+             var_flux_funclist: list of functions (of time) which returns the variable scale factor for the corresponding entry in incident_var_fluxlist. 
+                               Each function should be a function of time. This will be multiplied to corresponding frames in incident_var_fluxlist
+                               A redundent example is a constant aperture scaling of 1 for the flux rate irrespective of time
+                               ie. flux_scale = lambda x:np.ones(x.shape)
 
              itime: total integration time in seconds.
                     Actual exposure time will be rounded up to integer readout time
@@ -144,22 +144,38 @@ class Detector(object):
         Output:
              Data_cube: ndarray of exposure readout cube 
         """
-        if flux_scale is None: # Use a constant aperture scaling of 1 for the flux rate
-            flux_scale = lambda x : np.ones(x.shape)
+        if incident_var_fluxlist is not None: # make sure the flux scale functions are also provided
+            if isinstance(incident_var_fluxlist,np.ndarray) and not isinstance(var_flux_funclist,list):
+                # Lazy user entered a single flux frame and a single function.  Forgive them and convert it into a list.
+                incident_var_fluxlist = [incident_var_fluxlist]
+                var_flux_funclist = [var_flux_funclist]
+            if len(incident_var_fluxlist) != len(var_flux_funclist) :
+                raise ValueError('User Input Error: length of var_flux_funclist:{0} should be same as incident_var_fluxlist:{1}'.format(len(var_flux_funclist),len(incident_var_fluxlist)))
 
         # Estimate number of Non distructive readout (NDRs)
         No_of_NDRs = int(itime/self.t_framereadout) + 1
         self.update_HXRGNoise(naxis3 = No_of_NDRs)
 
         P = self.DP.HXRGNoise_kargs # parameter dictionary
-        # First fill the itime array with delta time
-        itime_perpixel = np.ones((P['naxis3'],P['naxis2'],P['naxis1'])) * self.t_framereadout
-        # First readout is non uniform itime
-        itime_perpixel[0,:,:] = self.t_pixelwise_framereadout()
-        # cumultatively add the effective itime for each pixel along time axis
-        itime_perpixel = np.cumsum(itime_perpixel,axis=0)
 
-        flux_rate_cube = incident_flux_const + incident_flux_var * flux_scale(itime_perpixel)
+        flux_rate_cube = incident_const_flux[np.newaxis,:,:].repeat(No_of_NDRs,axis=0)
+
+        if incident_var_fluxlist is not None: # add any variable fluxes if provided by user
+            # create a time array for input to variable flux scale function
+            # First fill the itime array with delta time
+            itime_perpixel = np.ones((P['naxis3'],P['naxis2'],P['naxis1'])) * self.t_framereadout
+            # First readout is non uniform itime
+            itime_perpixel[0,:,:] = self.t_pixelwise_framereadout()
+            # cumultatively add the effective itime for each pixel along time axis
+            itime_perpixel = np.cumsum(itime_perpixel,axis=0)
+
+            # Shift the itime in each pixel readout to the time at the middle of the time between consecutive readouts
+            # This is so that, the flux collected in each pixel, to a linear approximation, is the product of flux rate at the center of readout times the readouttime
+            itime_perpixel[0,:,:] /= 2.
+            itime_perpixel[1:,:,:] -= self.t_framereadout/2.
+
+            for ivarflux,flux_scale in zip(incident_var_fluxlist,var_flux_funclist):
+                flux_rate_cube += ivarflux * flux_scale(itime_perpixel)
         
         Effective_eflux = self.set_reference_pixels_zero(flux_rate_cube + self.DP.dark_current)
         # Calculate output data cube
