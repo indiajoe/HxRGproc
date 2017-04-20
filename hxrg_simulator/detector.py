@@ -44,8 +44,15 @@ class Detector(object):
         row_overhead = self.DP.HXRGNoise_kargs['nroh'] # number of row overhead gap in pixel units
         Strip_itime_full = np.reshape(np.arange( naxis1 * (naxis2+row_overhead)) * dt,
                                       (naxis1, (naxis2+row_overhead)))
+        # Alternate channels are flipped while reading out
+        StripList = []
+        for i in range(No_of_strips):
+            if i%2 == 0:
+                StripList.append(Strip_itime_full[:,:-row_overhead])
+            else:
+                StripList.append(np.fliplr(Strip_itime_full[:,:-row_overhead])) # Flip Left<->right
 
-        return np.hstack( [Strip_itime_full[:,:-row_overhead]] *No_of_strips )
+        return np.hstack( StripList )
 
 
     def apply_non_linearity(self,datacube):
