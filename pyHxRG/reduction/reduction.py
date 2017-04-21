@@ -1,6 +1,7 @@
 #!/usr/bin/env python 
 """ This tool is for recovering the slope/flux image from an HxRG readout data cube """
 from __future__ import division
+import numpy as np
 
 def subtract_reference_pixels(img,no_channels=32):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
