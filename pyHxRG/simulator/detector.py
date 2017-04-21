@@ -1,7 +1,7 @@
 """ This file contains the detector object which simulates HxRG """
 from __future__ import division
 
-import detector_params as DP
+import .detector_params as DP
 import nghxrg as ng
 from astropy.io import fits
 import numpy as np

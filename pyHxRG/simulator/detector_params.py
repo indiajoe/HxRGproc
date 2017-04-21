@@ -21,9 +21,11 @@ dark_current = 0.005  # e-/s/pix
 ######## Inter-pixel capacitance (IPC) #########
 # Provide the Normalise convolution matrix (as numpy array) for simulating IPC
 # Enter None for skipping this step
-ipc_matrix = None
+import numpy as np
+ipc_matrix = np.array([[0,    0.004,    0],
+                       [0.008,0.975,0.009],
+                       [0,    0.004,    0]])
 ######
-
 
 #################### ng.HXRGNoise input arguments ##############
 #### See the doc string of ng.HXRGNoise  for details of all the allowed list of input parameters
@@ -34,4 +36,9 @@ HXRGNoise_kargs = {'naxis1':2048,
                    'nroh': 12, # nroh and nfoh are in units of clock steps
                    'nfoh' : 1,
                    'verbose' : False}  
+
+############################ Output gain
+##### e-/ADU gain factor for converting final output to ADU
+############## This should include both HxRG and ASIC or Leach Box gains
+epadu = 2.5
 
