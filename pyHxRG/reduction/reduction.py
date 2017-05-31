@@ -110,3 +110,46 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
 
     return DataCube
 
+
+
+def slope_img_from_cube(DataCube,time):
+    """ Fits a slope by linear regression along the axis=0, with respect to time and returns the slope and constant for each pixel as a 2d Matrix
+    The linear fitting function is  y = alpha + beta *x
+    Equations based on https://en.wikipedia.org/wiki/Simple_linear_regression#Numerical_example
+    Parameters:
+    -----------
+    DataCube   : Masked numpy 3d array.
+               Time axis should be axis=0
+               The points which shouldn't be used for straight line fitting should be masked out by numpy's ma module.
+    time      : 1d numpy array
+               The time corresponding to each slice along the time axis of the data. The slope calculated will be in 
+               units of this time.
+    Returns
+    -----------
+    (beta,alpha) : masked (2d numpy array, 2d numpy array)
+                  The straight line fit is of the equation  y = alpha + beta *x
+                  The slope beta and constant alpha is for each pixel is returned as two 2d numpy arrays.
+    """
+    #The linear regression fit.  y = alpha + beta *x
+    #Equation notations based on https://en.wikipedia.org/wiki/Simple_linear_regression#Numerical_example
+    #Variables are 2d matrices corresponding to 2d array of pixels.
+    tshape = tuple(np.roll(DataCube.shape,-1))  # Creating the tuple to resize the time array to 3d cube. We will have to do a (2,0,1) permutation later. 
+
+    Sx = np.ma.array(np.transpose(np.resize(time,tshape),(2,0,1)),
+                     mask=np.ma.getmaskarray(DataCube)).sum(axis=0,dtype=np.float64)
+    Sxx = np.ma.array(np.transpose(np.resize(np.square(time),tshape),(2,0,1)),
+                      mask=np.ma.getmaskarray(DataCube)).sum(axis=0,dtype=np.float64)
+
+    Sy = DataCube.sum(axis=0,dtype=np.float64)
+    # Syy=(np.square(DataCube)).sum(axis=0,dtype=np.float64)  #Only needed to calculate error in slope
+    Sxy = (DataCube*time[:,np.newaxis,np.newaxis]).sum(axis=0,dtype=np.float64)
+    n = np.ma.count(DataCube,axis=0)   #number of points used in fitting slope of a pixel
+    
+    beta = (n*Sxy - Sx*Sy)/ (n*Sxx - Sx**2)
+    alpha = Sy/n - beta*Sx/n
+
+    #mask beta and alpha where n < 2
+    beta = np.ma.masked_where(n<2,beta)
+    alpha = np.ma.array(alpha,mask=np.ma.getmaskarray(beta))
+
+    return beta,alpha
