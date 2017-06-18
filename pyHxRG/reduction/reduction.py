@@ -3,11 +3,15 @@
 from __future__ import division
 import numpy as np
 
-def subtract_reference_pixels(img,no_channels=32):
+def subtract_reference_pixels(img,no_channels=32,statfunc=np.median):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
     Input:
          img: 2D full frame Non distructive image readout of HxRG.
          no_channels: Number of channels used in readout. (default:32)
+         statfunc: Function(array,axis) which returns the median/mean etc..
+
+         IMP Note- If Pedestal is not subtracted out in img, use statfunc=np.mean
+                   If Pedestal is subtracted out, you can use more robust statfunc=np.median
     Output:
          2D image after subtracting the Reference pixel biases using the following procedure.
          Steps:
@@ -19,12 +23,12 @@ def subtract_reference_pixels(img,no_channels=32):
 """
     correctedStrips = []
     for channelstrip in np.split(img,np.arange(1,no_channels)*int(2048/no_channels),axis=1):
-        topRef = np.mean([np.median(channelstrip[:4,0::2]),np.median(channelstrip[:4,1::2])])  # Calculate mean of median of odd and even columns                    
-        botRef = np.mean([np.median(channelstrip[-4:,0::2]),np.median(channelstrip[-4:,1::2])])
+        topRef = np.mean([statfunc(channelstrip[:4,0::2]),statfunc(channelstrip[:4,1::2])])  # Calculate mean of median/mean of odd and even columns                    
+        botRef = np.mean([statfunc(channelstrip[-4:,0::2]),statfunc(channelstrip[-4:,1::2])])
         correctedStrips.append(channelstrip - np.linspace(topRef,botRef,channelstrip.shape[0])[:,np.newaxis])
 
     HRefSubtractedImg = np.hstack(correctedStrips)
-    VRef = np.median(np.hstack((HRefSubtractedImg[:,:4],HRefSubtractedImg[:,-4:])),axis=1)
+    VRef = statfunc(np.hstack((HRefSubtractedImg[:,:4],HRefSubtractedImg[:,-4:])),axis=1)
     return HRefSubtractedImg - VRef[:,np.newaxis]
 
 def fit_slope_zeroIntercept_residue(X,Y):
@@ -110,6 +114,28 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
 
     return DataCube
 
+
+def remove_bias_preservepedestal_in_cube(DataCube,no_channels=32):
+    """ Returns the data cube after removing only variable biases from data cube. And preserves the pedestal bias.
+    Input:
+        DataCube: The 3D Raw readout Data Cube from an up-the-ramp readout of HxRG.
+        no_channels: Number of channels used in readout. (default:32)
+    Output:
+       VBiasCorrectedDataCube: 3D data cube after removing only the variable biases, preserving pedestal.
+    
+    """
+    # Convert to float, just incase it is something else like uint
+    if DataCube.dtype not in [np.float, np.float_, np.float16, np.float32, np.float64, np.float128]:
+        DataCube = DataCube.astype(np.float)  
+
+    # Step 1: Estimate bias values from top and bottom reference pixels and subtract them for each channel strip.
+    # Step 2: Estimate bias value fluctuation in Vertical direction during the readout time, and subtract them from each strip.
+    cleanndrArray = np.array([subtract_reference_pixels(ndr,no_channels=no_channels, statfunc=np.mean) for ndr in DataCube])
+    
+    # Now calculate mean of all the Bias corrections to obtain pedestal
+    Pedestal = np.mean(DataCube - cleanndrArray, axis=0)
+
+    return cleanndrArray + Pedestal
 
 
 def slope_img_from_cube(DataCube,time):
