@@ -18,7 +18,7 @@ setup(name='pyHxRG',
       author='Joe Ninan',
       author_email='indiajoe@gmail.com',
       license='LGPLv3+',
-      packages=['pyHxRG'],
+      packages=['pyHxRG','pyHxRG.reduction','pyHxRG.simulator'],
       install_requires=[
           'numpy',
       ],
