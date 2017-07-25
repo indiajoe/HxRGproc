@@ -83,13 +83,13 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
     return np.dstack(CorrectedCubes)
         
 
-def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correction=True):
+def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correction=False):
     """ Returns the data cube after removing variable biases from data cube.
     Input:
         DataCube: The 3D Raw readout Data Cube from an up-the-ramp readout of HxRG.
         no_channels: Number of channels used in readout. (default:32)
         time: (optional) epochs of the NDR readouts in the data cube. (default: uniform cadence)
-        do_LSQmedian_correction : (bool, default=True) Does an extra LSQ based median bias correction.
+        do_LSQmedian_correction : (bool, default=False) Does an extra LSQ based median bias correction.
                           Do this only for data which does not saturate in more than 40% of half of each channel.
                           Also only for images where more than 40% of pixels have steady linear flux incedence.
     Output:
