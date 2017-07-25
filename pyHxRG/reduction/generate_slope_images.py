@@ -11,9 +11,10 @@ import re
 from datetime import datetime
 from astropy.time import Time, TimezoneInfo
 import astropy.units as u
-from multiprocessing import Pool
+from multiprocessing import TimeoutError, Pool
 from functools import wraps, partial
 import logging
+import signal
 from . import reduction 
 
 SaturationCount = 50000  # TODO: Move these to config files later
@@ -234,10 +235,31 @@ def main_Teledyne():
             logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
             logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
             
-    pool = Pool(processes=args.noCPUs)
-    pool.map(TeledyneWindowsSlopeimageGenerator,SelectedRampList)
+    logging.info('Calculating slope for {0} Ramps in {1}'.format(len(SelectedRampList),args.InputDir))
+
+    # To Run all in a single process serially
     # for Ramp in SelectedRampList:
     #     TeledyneWindowsSlopeimageGenerator(Ramp)
+
+
+    # Make all the subprocesses inside the pool to ignore SIGINT
+    original_sigint_handler = signal.signal(signal.SIGINT,signal.SIG_IGN)
+    pool = Pool(processes=args.noCPUs)
+    # Make the parent process catch SIGINT by restoring
+    signal.signal(signal.SIGINT,original_sigint_handler)
+    try:
+        outputfiles = pool.map_async(TeledyneWindowsSlopeimageGenerator,SelectedRampList)
+        MaximumRunTime = 2*24*60*60 # Two days
+        outputfiles.get(MaximumRunTime) # Wait till everything is over
+    except KeyboardInterrupt:
+        logging.critical('SIGINT Keyboard Interrupt Recevied... Shutting down the script..')
+        pool.terminate()
+    except TimeoutError:
+        logging.critical('TIMEOUT Error. Shutting down the script. (Timeout ={0}s)'.format(MaximumRunTime))
+        pool.terminate()
+    else:
+        pool.close()
+        logging.info('Finished {0}'.format(args.InputDir))
 
 ###############################################
 
