@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 """ This script is to create slope images from the Up the ramp images"""
+from __future__ import division
 import sys
 import argparse
 from astropy.io import fits
@@ -63,6 +64,7 @@ def calculate_slope_image(UTRlist):
     # convert all masked values to nan
     slopeimg = np.ma.filled(slopeimg,fill_value=np.nan)
     header['NoNDR'] = (NoNDR, 'No of NDRs used in slope')
+    header['EXPLNDR'] = (time[-1], 'Int Time of Last NDR used in slope')
     header['history'] = 'Slope image generated'
     hdu = fits.PrimaryHDU(slopeimg,header=header)
     hdulist = fits.HDUList([hdu])
@@ -143,7 +145,28 @@ def ExtraHeaderCalculations4Windows(header,Ramptime):
 
     return ExtraHeader
 
+def estimate_NoNDR_Drop_G_TeledyneData(imagelist):
+    """ Returns (No of NDRs in Group, Drops, number of Groups) based on the imagename list """
+    RampList = sorted(set((int(re.search('H2RG_R(.+?)_M',os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+    GroupList = sorted(set((int(re.search('H2RG_R.+?_M(.+?)_',os.path.basename(f)).group(1)) for f in imagelist))) # 5 in H2RG_R01_M05_N01.fits
+    noNDRList = sorted(set((int(re.search('H2RG_R.+?_M.+?_N(.+?).fits',os.path.basename(f)).group(1)) for f in imagelist))) # 1 in H2RG_R45_M05_N01.fits
+    noG = max(GroupList)
+    noR = max(RampList)
+    noNDR = max(noNDRList)
+    if noG > 1:
+        # We need to estimate the Drops between frames, which is not recorded anywhere in headers by Teledyne softwatre
+        ImageDir = os.path.dirname(imagelist[0])
+        frametime = fits.getval(imagelist[0],'FRMTIME')
+        itimeLastNDRinG01 = fits.getval(os.path.join(ImageDir,'H2RG_R{0:02}_M01_N{1:02}.fits'.format(min(RampList),noNDR)),'INTTIME')
+        itimeFirstNDRinG02 = fits.getval(os.path.join(ImageDir,'H2RG_R{0:02}_M02_N01.fits'.format(min(RampList))),'INTTIME')
+        NoOfDrops = int(round((itimeFirstNDRinG02 - itimeLastNDRinG01)/frametime))-1
+    else:
+        NoOfDrops = 0 # is irrelevant
 
+    logging.info('Estimated Number of (NDRs in Group: Drops: Groups) = {0}:{1}:{2}'.format(noNDR,NoOfDrops,noG))
+    return noNDR,NoOfDrops,noG
+
+#####
 def parse_args_Teledyne():
     """ Parses the command line input arguments for Teledyne Software data reduction"""
     parser = argparse.ArgumentParser(description="Script to Generate Slope/Flux images from Up-the-Ramp data taken using Teledyne's Windows software")
@@ -151,7 +174,7 @@ def parse_args_Teledyne():
                         help="Input Directory contiaining the Up-the-Ramp Raw data files")
     parser.add_argument('OutputMasterDir', type=str,
                         help="Output Master Directory to which output images to be written")
-    parser.add_argument('NoNDR_Drop_G', type=str, 
+    parser.add_argument('--NoNDR_Drop_G', type=str, default=None,
                         help="No of NDRS per Group:No of Drops:No of Groups (Example  40:60:5)")
     parser.add_argument('--FirstNDR', type=int, default=0,
                         help="Number of First NDRs to be skipped")
@@ -180,12 +203,16 @@ def main_Teledyne():
     OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(args.InputDir.rstrip('/')))
     RampFilenamePrefix='H2RG_R{0:02}_M'
 
+    logging.info('Processing data in {0}'.format(args.InputDir))
+
     # Find the number of Ramps in the input Directory
     imagelist = sorted((os.path.join(args.InputDir,f) for f in os.listdir(args.InputDir) if (os.path.splitext(f)[-1] == '.fits')))
     RampList = sorted(set((int(re.search('H2RG_R(.+?)_M',os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
-
-    # Do sanity check that all the expected NDRS are avialable
-    noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
+    if args.NoNDR_Drop_G is None:
+        noNDR,noDrop,noG = estimate_NoNDR_Drop_G_TeledyneData(imagelist)
+    else:
+        noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
+    # Do sanity check that all the expected NDRS are available
     ExpectedFramesPerRamp = noNDR*noG
     RampTime = fits.getval(imagelist[0],'FRMTIME')*(noNDR+noDrop)*noG
     TeledyneExtraHeaderCalculator = partial(ExtraHeaderCalculations4Windows,Ramptime=RampTime)
@@ -197,7 +224,6 @@ def main_Teledyne():
                                                  FilenameSortKeyFunc = TeledyneFileNameSortKeyFunc,
                                                  ExtraHeaderDictFunc= TeledyneExtraHeaderCalculator)
 
-    logging.info('Processing data in {0}'.format(args.InputDir))
     logging.info('Output slope images will be written to {0}'.format(OutputDir))
     SelectedRampList = []
     for Ramp in RampList:
