@@ -20,7 +20,7 @@ setup(name='pyHxRG',
       license='LGPLv3+',
       packages=['pyHxRG','pyHxRG.reduction','pyHxRG.simulator'],
       entry_points = {
-          'console_scripts': ['generate_slope_images=pyHxRG.reduction.generate_slope_images:main'],
+          'console_scripts': ['generate_slope_imagesT=pyHxRG.reduction.generate_slope_images:main_Teledyne'],
       },
       install_requires=[
           'numpy',
