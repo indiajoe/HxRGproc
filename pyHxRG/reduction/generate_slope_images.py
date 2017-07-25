@@ -91,6 +91,10 @@ def generate_slope_image(RampNo,InputDir,OutputDir,OutputFilePrefix='Slope-R',
     Returns:
         OutputFileName : Filename of the output slope fits file which was written
     """
+    if FilenameSortKeyFunc is None:
+        # Use the file name string itself to sort!
+        logging.warning('No function to sort filename provided, using default filename sorting..')
+        FilenameSortKeyFunc = lambda f: f
 
     OutputFileName = os.path.join(OutputDir,OutputFilePrefix+'{0}.fits'.format(RampNo))
     try:
@@ -106,7 +110,7 @@ def generate_slope_image(RampNo,InputDir,OutputDir,OutputFilePrefix='Slope-R',
         
     # First search for all raw files
     UTRlistT = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits') and (RampFilenamePrefix.format(RampNo) in os.path.basename(f))))
-    UTRlist = sorted(UTRlistT,key=TeledyneFileNameSortKeyFunc)
+    UTRlist = sorted(UTRlistT,key=FilenameSortKeyFunc)
 
     if LastNDR is None:
         LastNDR = len(UTRlist)
@@ -121,9 +125,9 @@ def generate_slope_image(RampNo,InputDir,OutputDir,OutputFilePrefix='Slope-R',
 
 
 #### Functions specific to help reduce Windows Teledyne software data
-def TeledyneFileNameSortKeyFunc(f):
+def TeledyneFileNameSortKeyFunc(fname):
     """ Function which returns the key to sort Teledyne filename """
-    return tuple(map(int,re.search('H2RG_R(.+?)_M(.+?)_N(.+?).fits',os.path.basename(f)).group(1,2,3)))
+    return tuple(map(int,re.search('H2RG_R(.+?)_M(.+?)_N(.+?).fits',os.path.basename(fname)).group(1,2,3)))
 
 def ExtraHeaderCalculations4Windows(header,Ramptime):
     """ Returns a dictionary of extra entires for slope header """
@@ -132,7 +136,7 @@ def ExtraHeaderCalculations4Windows(header,Ramptime):
     ExtraHeader = {}
 
     ExtraHeader['OBSTIME'] = (header['ACQTIME'] + ((header['SEQNUM_R']*header['NRESETS']*header['FRMTIME']) + ((header['SEQNUM_R']-1)*Ramptime))/(60*60*24.0), 'Estimated Observation Time')
-
+    # Because of this silly SIMPLE header (we need for calculating file write time), we need raw fits file header. Don't use hdulist's header.
     t = Time(datetime(*tuple([int(header.comments['SIMPLE'].split()[-1]),month2nub[header.comments['SIMPLE'].split()[-4]],
                               int(header.comments['SIMPLE'].split()[-3])]+map(int,header.comments['SIMPLE'].split()[-2].split(':'))),tzinfo=utc_minus_four_hour))
     ExtraHeader['FWTIME'] = (t.jd,'Time raw fits image was written')
@@ -185,6 +189,7 @@ def main_Teledyne():
     ExpectedFramesPerRamp = noNDR*noG
     RampTime = fits.getval(imagelist[0],'FRMTIME')*(noNDR+noDrop)*noG
     TeledyneExtraHeaderCalculator = partial(ExtraHeaderCalculations4Windows,Ramptime=RampTime)
+
     TeledyneWindowsSlopeimageGenerator = partial(generate_slope_image,
                                                  InputDir=args.InputDir,OutputDir=OutputDir,OutputFilePrefix='Slope-R',
                                                  FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
@@ -203,10 +208,10 @@ def main_Teledyne():
             logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
             logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
             
-    # pool = Pool(processes=args.noCPUs)
-    # pool.map(TeledyneWindowsSlopeimageGenerator,SelectedRampList)
-    for Ramp in SelectedRampList:
-        TeledyneWindowsSlopeimageGenerator(Ramp)
+    pool = Pool(processes=args.noCPUs)
+    pool.map(TeledyneWindowsSlopeimageGenerator,SelectedRampList)
+    # for Ramp in SelectedRampList:
+    #     TeledyneWindowsSlopeimageGenerator(Ramp)
 
 ###############################################
 
