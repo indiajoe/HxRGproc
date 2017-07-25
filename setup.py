@@ -19,8 +19,12 @@ setup(name='pyHxRG',
       author_email='indiajoe@gmail.com',
       license='LGPLv3+',
       packages=['pyHxRG','pyHxRG.reduction','pyHxRG.simulator'],
+      entry_points = {
+          'console_scripts': ['generate_slope_images=pyHxRG.reduction.generate_slope_images:main'],
+      },
       install_requires=[
           'numpy',
+          'astropy',
       ],
       include_package_data=True,
       zip_safe=False)
