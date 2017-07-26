@@ -19,6 +19,13 @@ import ConfigParser
 from . import reduction 
 
 
+def log_all_uncaughtexceptions_handler(exp_type, exp_value, exp_traceback):
+    """ This handler is to override sys.excepthook to log uncaught exceptions """
+    logging.error("Uncaught exception", exc_info=(exp_type, exp_value, exp_traceback))
+    # call the original sys.excepthook
+    sys.__excepthook__(exp_type, exp_value, exp_traceback)
+
+
 def LogMemoryErrors(func):
     """ This is a decorator to log Memory errors """
     @wraps(func)
@@ -27,7 +34,7 @@ def LogMemoryErrors(func):
             return func(*args, **kwargs)
         except MemoryError as e:
             logging.critical('Memory Error: Please free up Memory on this computer to continue..')
-            logging.error(e)
+            logging.exception('Memory Error while calling {0}'.format(func.__name__))
             logging.info('Hint: Reduce number of processes running in parallel on this computer')
             raise
     return wrappedFunc
@@ -249,6 +256,9 @@ def parse_args_Teledyne():
     
 def main_Teledyne():
     """ Standalone Script to generate Slope images from Up the Ramp data taken using Teledyne's Windows software"""
+    # Override the default exception hook with our custom handler
+    sys.excepthook = log_all_uncaughtexceptions_handler
+
     args = parse_args_Teledyne()    
 
     if args.logfile is None:
