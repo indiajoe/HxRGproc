@@ -11,13 +11,27 @@ import re
 from datetime import datetime
 from astropy.time import Time, TimezoneInfo
 import astropy.units as u
-from multiprocessing import TimeoutError, Pool
-from functools import wraps, partial
+from multiprocessing import TimeoutError
+from multiprocessing.pool import Pool
+from functools32 import wraps, partial
 import logging
 import signal
+import traceback
 import ConfigParser
 from . import reduction 
 
+
+def pack_traceback_to_errormsg(func):
+    """Decorator which packes any raised error traceback to its msg 
+    This is useful to pack a child process function call while using multiprocess """
+    @wraps(func)
+    def wrappedFunc(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            msg = "{}\nOriginal {}".format(e, traceback.format_exc())
+            raise type(e)(msg)
+    return wrappedFunc
 
 def log_all_uncaughtexceptions_handler(exp_type, exp_value, exp_traceback):
     """ This handler is to override sys.excepthook to log uncaught exceptions """
@@ -103,6 +117,8 @@ def calculate_slope_image(UTRlist,Config):
     hdulist = fits.HDUList([hdu])
     return hdulist,header
 
+# @pack_traceback_to_errormsg can be commented out when function not used in multiprocess
+@pack_traceback_to_errormsg
 @LogMemoryErrors
 def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFilePrefix='Slope-R',
                          FirstNDR = 0, LastNDR = None,
@@ -137,7 +153,7 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFilePrefix='Sl
         os.makedirs(OutputDir)
     except OSError as e:
         logging.info(e)
-        logging.info('Ignore WARNING : Output dir exists. ')
+        logging.info('Ignore above msg that Output dir exists. ')
 
     if os.path.isfile(OutputFileName):
         logging.warning('WARNING: Output file {0} already exist...'.format(OutputFileName))
@@ -309,7 +325,7 @@ def main_Teledyne():
             
     logging.info('Calculating slope for {0} Ramps in {1}'.format(len(SelectedRampList),args.InputDir))
 
-    # To Run all in a single process serially
+    # To Run all in a single process serially. Very useful for debugging
     # for Ramp in SelectedRampList:
     #     TeledyneWindowsSlopeimageGenerator(Ramp)
 
