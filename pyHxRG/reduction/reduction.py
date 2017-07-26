@@ -182,3 +182,39 @@ def slope_img_from_cube(DataCube,time):
     alpha = np.ma.array(alpha,mask=np.ma.getmaskarray(beta))
 
     return beta,alpha
+
+
+def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
+    """ Applies the classical non-linearity correction polynomial to Datacube 
+    Parameters:
+    -----------
+    DataCube   : Numpy 3d array.
+               Time axis should be axis=0
+    NLcorrCoeff: String or numpy 3d array
+                Either the file name of the npy file which has the save non linearity correction coefficents.
+                Or the 3d cube of coefficients.
+    UpperThresh: String or numpy 3d array (optional, default:None)
+                Upper Threshold value of the pixel count for each pixel above which non-linearity correction is unreliable and need to be masked.
+    Returns
+    -----------
+    OutDataCube: numpy ma masked 3d cube array
+                Outputs is the non linearity corrected 3d Datacube, 
+                If UpperThresh is provided it is a numpy masked ma array 
+                  with all values which was above UpperThresh masked.
+    
+    """
+    if isinstance(NLcorrCoeff,str):
+        NLcorrCoeff = np.load(NLcorrCoeff)
+
+    OutDataCube = np.zeros_like(DataCube)
+
+    for p,coeffs in enumerate(NLcorrCoeff):
+        OutDataCube += coeffs[np.newaxis,:,:] * np.power(DataCube,p)
+
+    if UpperThresh is not None:
+        if isinstance(UpperThresh,str):
+            UpperThresh = np.load(UpperThresh)
+        # Mask all data above the threshold
+        OutDataCube = np.ma.masked_greater(OutDataCube,UpperThresh)
+        
+    return OutDataCube

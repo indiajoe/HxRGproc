@@ -15,9 +15,9 @@ from multiprocessing import TimeoutError, Pool
 from functools import wraps, partial
 import logging
 import signal
+import ConfigParser
 from . import reduction 
 
-SaturationCount = 50000  # TODO: Move these to config files later
 
 def LogMemoryErrors(func):
     """ This is a decorator to log Memory errors """
@@ -45,34 +45,59 @@ def LoadDataCube(filelist):
     return np.array(datalist), fits.getheader(filelist[0])
 
 
-def calculate_slope_image(UTRlist):
+def calculate_slope_image(UTRlist,Config):
     """ Returns slope image hdulist object, and header from the input up-the-ramp fits file list 
     Input:
           UTRlist: List of up-the-ramp NDR files
+          Config: Configuration dictionary imported from the Config file
     Returns:
          Slopeimage hdulist object, header
 """
     time = np.array([fits.getval(f,'INTTIME') for f in UTRlist])
     DataCube, header = LoadDataCube(UTRlist) 
     NoNDR = DataCube.shape[0]
-    PedestalSubSaturation = SaturationCount - np.median(DataCube[0,:,:])
-    DataCube = reduction.remove_biases_in_cube(DataCube,time=time,no_channels=header['NOUTPUTS'],do_LSQmedian_correction=True)
     logging.info('Number of NDRs = {0}'.format(NoNDR))
+    # Bias level corrections
+    if Config['DoPedestalSubtraction']: 
+        logging.info('Subtracted Pedestal')
+        DataCube = reduction.remove_biases_in_cube(DataCube,time=time,
+                                                   no_channels=header['NOUTPUTS'],
+                                                   do_LSQmedian_correction=Config['DoLSQmedianCorrection'])
+    else:
+        DataCube = reduction.remove_bias_preservepedestal_in_cube(DataCube,
+                                                                  no_channels=header['NOUTPUTS'])
+
+    # Non-linearity Correction
+    if Config['NonLinearCorrCoeff']:
+        logging.info('Applying NonLinearity Corr:{0}'.format(Config['NonLinearCorrCoeff']))
+        DataCube = reduction.apply_nonlinearcorr_polynomial(DataCube,
+                                                            Config['NonLinearCorrCoeff'],
+                                                            UpperThresh=None)
+    # Mask values above upper threshold before fitting slope
+    if Config['UpperThreshold']:
+        if isinstance(Config['UpperThreshold'],str):
+            UpperThresh = np.load(Config['UpperThreshold'])  
+        else:
+            UpperThresh = Config['UpperThreshold']
+        DataCube = np.ma.masked_greater(DataCube,UpperThresh)
+
     logging.info('Fitting slope..')
-    slopeimg,alpha = reduction.slope_img_from_cube(np.ma.masked_greater(DataCube,
-                                                                        PedestalSubSaturation), 
-                                                   time)
+    slopeimg,alpha = reduction.slope_img_from_cube(DataCube, time)
+
     # convert all masked values to nan
     slopeimg = np.ma.filled(slopeimg,fill_value=np.nan)
     header['NoNDR'] = (NoNDR, 'No of NDRs used in slope')
     header['EXPLNDR'] = (time[-1], 'Int Time of Last NDR used in slope')
+    header['PEDSUB'] = (Config['DoPedestalSubtraction'], 'T/F Did Pedestal Subtraction')
+    header['NLCORR'] = (Config['NonLinearCorrCoeff'], 'NonLinearCorr Coeff File')
+    header['UTHRESH'] = (Config['UpperThreshold'], 'UpperThreshold Mask value/file')
     header['history'] = 'Slope image generated'
     hdu = fits.PrimaryHDU(slopeimg,header=header)
     hdulist = fits.HDUList([hdu])
     return hdulist,header
 
 @LogMemoryErrors
-def generate_slope_image(RampNo,InputDir,OutputDir,OutputFilePrefix='Slope-R',
+def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFilePrefix='Slope-R',
                          FirstNDR = 0, LastNDR = None,
                          RampFilenamePrefix='H2RG_R{0:02}_M',
                          FilenameSortKeyFunc = None,
@@ -83,6 +108,7 @@ def generate_slope_image(RampNo,InputDir,OutputDir,OutputFilePrefix='Slope-R',
         RampNo: (int) Ramp number (Ex: 1)
         InputDir: (str) Input Directory containing the UTR files
         OutputDir: (str) Output Directory to write output slope images into
+        Config: Configuration dictionary imported from the Config file
         OutputFilePrefix: (str,optional) Output file prefix (default: 'Slope-R')
         FirstNDR = (int,optional) Number of initial NDRs to skip for slope fitting (default: 0) 
         LastNDR = (int/None,optional) Number of the maximum NDR to use in slope fitting (default: None means all)
@@ -118,7 +144,7 @@ def generate_slope_image(RampNo,InputDir,OutputDir,OutputFilePrefix='Slope-R',
     if LastNDR is None:
         LastNDR = len(UTRlist)
     logging.info('Loading Ramp data of {0}'.format(RampNo))
-    Slopehdulist,header = calculate_slope_image(UTRlist[FirstNDR:LastNDR])
+    Slopehdulist,header = calculate_slope_image(UTRlist[FirstNDR:LastNDR],Config)
     if ExtraHeaderDictFunc is not None:
         for key,value in ExtraHeaderDictFunc(header).items():
             Slopehdulist[0].header[key] = value
@@ -168,6 +194,36 @@ def estimate_NoNDR_Drop_G_TeledyneData(imagelist):
     return noNDR,NoOfDrops,noG
 
 #####
+
+def parse_str_to_types(string):
+    """ Converts string to different object types they represent """
+    if string == 'True':
+        return True
+    elif string == 'False':
+        return False
+    elif string == 'None':
+        return None
+    elif string.lstrip('-+ ').isdigit():
+        return int(string)
+    else:
+        try:
+            return float(string)
+        except ValueError:
+            return string
+        
+        
+
+def create_configdict_from_file(configfilename):
+    """ Returns a configuration object by loading the config file """
+    Configloader = ConfigParser.SafeConfigParser()
+    Configloader.optionxform = str  # preserve the Case sensitivity of keys
+    Configloader.read(configfilename)
+    # Create a Config Dictionary
+    Config = {}
+    for key,value in Configloader.items('slope_settings'):
+        Config[key] = parse_str_to_types(value)
+    return Config
+
 def parse_args_Teledyne():
     """ Parses the command line input arguments for Teledyne Software data reduction"""
     parser = argparse.ArgumentParser(description="Script to Generate Slope/Flux images from Up-the-Ramp data taken using Teledyne's Windows software")
@@ -175,6 +231,8 @@ def parse_args_Teledyne():
                         help="Input Directory contiaining the Up-the-Ramp Raw data files")
     parser.add_argument('OutputMasterDir', type=str,
                         help="Output Master Directory to which output images to be written")
+    parser.add_argument('ConfigFile', type=str,
+                        help="Configuration File which contains settings for Slope calculation")
     parser.add_argument('--NoNDR_Drop_G', type=str, default=None,
                         help="No of NDRS per Group:No of Drops:No of Groups (Example  40:60:5)")
     parser.add_argument('--FirstNDR', type=int, default=0,
@@ -200,11 +258,13 @@ def main_Teledyne():
                             filename=args.logfile, filemode='a')
         logging.getLogger().addHandler(logging.StreamHandler(sys.stdout)) # Sent info to the stdout as well
 
-
-    OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(args.InputDir.rstrip('/')))
-    RampFilenamePrefix='H2RG_R{0:02}_M'
-
     logging.info('Processing data in {0}'.format(args.InputDir))
+
+    Config = create_configdict_from_file(args.ConfigFile)
+    logging.info('Slope Configuration: {0}'.format(Config))
+    OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(args.InputDir.rstrip('/')))
+    RampFilenamePrefix = 'H2RG_R{0:02}_M'
+
 
     # Find the number of Ramps in the input Directory
     imagelist = sorted((os.path.join(args.InputDir,f) for f in os.listdir(args.InputDir) if (os.path.splitext(f)[-1] == '.fits')))
@@ -219,7 +279,9 @@ def main_Teledyne():
     TeledyneExtraHeaderCalculator = partial(ExtraHeaderCalculations4Windows,Ramptime=RampTime)
 
     TeledyneWindowsSlopeimageGenerator = partial(generate_slope_image,
-                                                 InputDir=args.InputDir,OutputDir=OutputDir,OutputFilePrefix='Slope-R',
+                                                 InputDir=args.InputDir,OutputDir=OutputDir,
+                                                 Config = Config,
+                                                 OutputFilePrefix='Slope-R',
                                                  FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
                                                  RampFilenamePrefix=RampFilenamePrefix,
                                                  FilenameSortKeyFunc = TeledyneFileNameSortKeyFunc,
