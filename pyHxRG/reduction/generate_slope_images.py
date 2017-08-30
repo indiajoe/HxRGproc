@@ -266,6 +266,8 @@ def parse_args_Teledyne():
                         help="Number of parallel CPUs to be used to process independent Ramps in parallel")
     parser.add_argument('--logfile', type=str, default=None,
                         help="Log Filename to write logs during the run")
+    parser.add_argument("--loglevel", choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'], 
+                        default='INFO', help="Set the logging level")
 
     args = parser.parse_args()
     return args
@@ -278,9 +280,11 @@ def main_Teledyne():
     args = parse_args_Teledyne()    
 
     if args.logfile is None:
-        logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s',level=logging.INFO)
+        logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s',
+                            level=logging.getLevelName(args.loglevel))
     else:
-        logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s',level=logging.INFO, 
+        logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s',
+                            level=logging.getLevelName(args.loglevel), 
                             filename=args.logfile, filemode='a')
         logging.getLogger().addHandler(logging.StreamHandler(sys.stdout)) # Sent info to the stdout as well
 
