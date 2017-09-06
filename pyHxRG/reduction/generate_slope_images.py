@@ -60,9 +60,9 @@ def LoadDataCube(filelist):
     Returns:
          DataCube, fitsheader of first img
     """
-    logging.info('Loading UTR: {0}'.format(sorted(filelist)))
+    logging.info('Loading UTR: {0}'.format(filelist))
     # datalist = [subtractReferencePixels(fits.getdata(f)) for f in sorted(filelist)]
-    datalist = [fits.getdata(f) for f in sorted(filelist)]
+    datalist = [fits.getdata(f) for f in filelist]
     return np.array(datalist), fits.getheader(filelist[0])
 
 
