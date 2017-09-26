@@ -5,7 +5,7 @@ def readme():
         return f.read()
 
 setup(name='pyHxRG',
-      version='0.1',
+      version='0.3',
       description='Python Tool for Reducing HxRG near-infrared data',
       long_description = readme(),
       classifiers=[

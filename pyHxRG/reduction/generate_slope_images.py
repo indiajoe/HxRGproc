@@ -130,20 +130,45 @@ def calculate_slope_image(UTRlist,Config):
 
     # convert all masked values to nan
     slopeimg = np.ma.filled(slopeimg,fill_value=np.nan)
+
+    # Convert slope images from ADU/sec to electrons/sec
+    gain = Config['GainEPADU']
+    slopeimg *= gain
+    alpha *= gain
+    redn = Config['ReadNoise']* gain
+    # Calculate the varience image of the slope image using the formula Robberto 2010 (Eq 7) when m= 1 case
+    if Config['CalculateVarienceImage']:
+        tf = np.median(np.diff(time)) # The frame time estimate
+        VarImg = 6*(NoNDRArray**2 + 1)*slopeimg / (5*NoNDRArray*(NoNDRArray**2 -1)*tf) +\
+                 12*(redn**2 + gain**2 / 12.)/(NoNDRArray*(NoNDRArray**2 -1)*tf**2)
+
+
     header['NoNDR'] = (NoNDR, 'No of NDRs used in slope')
     header['EXPLNDR'] = (time[-1], 'Int Time of Last NDR used in slope')
     header['PEDSUB'] = (Config['DoPedestalSubtraction'], 'T/F Did Pedestal Subtraction')
     header['NLCORR'] = (Config['NonLinearCorrCoeff'], 'NonLinearCorr Coeff File')
     header['UTHRESH'] = (Config['UpperThreshold'], 'UpperThreshold Mask value/file')
+    header['CUNITS'] = ('e-/sec','Units of the counts in image')
+    header['EPADU'] = (gain,'Gain e/ADU')
+    header['READNOS'] = (redn,'Single NDR Read Noise (e- rms)')
     header['history'] = 'Slope image generated'
     hdu = fits.PrimaryHDU(slopeimg,header=header)
+    hdulist = fits.HDUList([hdu])
 
-    # Save the No# of NDRs used in each pixel also as a fitst extension
-    hduNoNDRs = fits.ImageHDU(NoNDRArray)
-    hduNoNDRs.header['COMMENT'] = 'No# of NDRS used in Slope fitting'
-
-    # Create multi extension fits file
-    hdulist = fits.HDUList([hdu,hduNoNDRs])
+    if Config['CalculateVarienceImage']:
+        # Save the varience image as a fits extention
+        hduVar = fits.ImageHDU(VarImg)
+        hduVar.header['CUNITS'] = ('(e-/sec)^2','Units of the counts in image')
+        hduVar.header['COMMENT'] = 'Varience Image of the Slope image'
+        # Create multi extension fits file
+        hdulist.append(hduVar)
+        
+    if Config['UpperThreshold']:
+        # Save the No# of NDRs used in each pixel also as a fits extension
+        hduNoNDRs = fits.ImageHDU(NoNDRArray)
+        hduNoNDRs.header['COMMENT'] = 'No# of NDRS used in Slope fitting'
+        # Create multi extension fits file
+        hdulist.append(hduNoNDRs)
 
     return hdulist,header
 
