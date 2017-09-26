@@ -102,6 +102,29 @@ def calculate_slope_image(UTRlist,Config):
             UpperThresh = Config['UpperThreshold']
         DataCube = np.ma.masked_greater(DataCube,UpperThresh)
 
+        # Number of NDRs used in slope fitting after simple threshold.
+        NoNDRArray = np.ma.count(DataCube,axis=0)
+
+        # If user has asked to make exposure constant in certain regions
+        if Config['ConstantExposureRegion']:
+            if isinstance(Config['ConstantExposureRegion'],str):
+                CExpRegionArray = np.load(Config['ConstantExposureRegion'])  
+            else:
+                # Use all array as same region
+                CExpRegionArray = np.ones((DataCube.shape[1],DataCube.shape[2]))
+            ExpCutoffPercentile = Config['CER_CutoffPercentile']
+            for region in np.unique(CExpRegionArray):
+                if region == 0 : 
+                    continue # Zero is for regions where no uniformity needs to be done
+                RegionMask = CExpRegionArray == region
+                # Find the cutoff NDR number
+                CutNDR = np.percentile(NoNDRArray[RegionMask],ExpCutoffPercentile,
+                                       interpolation='lower')
+                DataCube[CutNDR:,RegionMask] = np.ma.masked
+
+    # Number of NDRs actually used in slope fitting.
+    NoNDRArray = np.ma.count(DataCube,axis=0)
+        
     logging.info('Fitting slope..')
     slopeimg,alpha = reduction.slope_img_from_cube(DataCube, time)
 
@@ -114,7 +137,14 @@ def calculate_slope_image(UTRlist,Config):
     header['UTHRESH'] = (Config['UpperThreshold'], 'UpperThreshold Mask value/file')
     header['history'] = 'Slope image generated'
     hdu = fits.PrimaryHDU(slopeimg,header=header)
-    hdulist = fits.HDUList([hdu])
+
+    # Save the No# of NDRs used in each pixel also as a fitst extension
+    hduNoNDRs = fits.ImageHDU(NoNDRArray)
+    hduNoNDRs.header['COMMENT'] = 'No# of NDRS used in Slope fitting'
+
+    # Create multi extension fits file
+    hdulist = fits.HDUList([hdu,hduNoNDRs])
+
     return hdulist,header
 
 # @pack_traceback_to_errormsg can be commented out when function not used in multiprocess
