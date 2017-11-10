@@ -122,26 +122,41 @@ def calculate_slope_image(UTRlist,Config):
                                        interpolation='lower')
                 DataCube[CutNDR:,RegionMask] = np.ma.masked
 
+    # Mask initial readout of pixels which showed spurious values in first readout
+    # Use the [1,-3,3,-1] digital filter to detect abrupt changes in the up-the-ramp
+    T,I,J = reduction.abrupt_change_locations(DataCube,thresh=20)
+    CR_TIJ = [] # Cosmicray events list
+    for t,i,j in zip(T,I,J):
+        if t <=2:
+            DataCube[:2,i,j] = np.ma.masked
+        else:
+            CR_TIJ.append((t,i,j))  # save pure CR events
+
     # Number of NDRs actually used in slope fitting.
     NoNDRArray = np.ma.count(DataCube,axis=0)
-        
+
+    # Convert images from ADU to electrons
+    gain = Config['GainEPADU']
+    DataCube *= gain
     logging.info('Fitting slope..')
     slopeimg,alpha = reduction.slope_img_from_cube(DataCube, time)
 
     # convert all masked values to nan
     slopeimg = np.ma.filled(slopeimg,fill_value=np.nan)
 
-    # Convert slope images from ADU/sec to electrons/sec
-    gain = Config['GainEPADU']
-    slopeimg *= gain
-    alpha *= gain
     redn = Config['ReadNoise']* gain
-    # Calculate the varience image of the slope image using the formula Robberto 2010 (Eq 7) when m= 1 case
+
     if Config['CalculateVarienceImage']:
         tf = np.median(np.diff(time)) # The frame time estimate
-        VarImg = 6*(NoNDRArray**2 + 1)*slopeimg / (5*NoNDRArray*(NoNDRArray**2 -1)*tf) +\
-                 12*(redn**2 + gain**2 / 12.)/(NoNDRArray*(NoNDRArray**2 -1)*tf**2)
+        VarImg = reduction.varience_of_slope(slopeimg,NoNDRArray,tf,redn,gain)
 
+    # ReCalculate correct slope for Cosmic ray hit points
+    logging.info('Fixing {0} CR hit slopes..'.format(len(CR_TIJ)))
+    DataCube[zip(*CR_TIJ)] = np.ma.masked  # Mask all points just after CR hit
+    for t,i,j in CR_TIJ:
+        slopeimg[i,j], var = reduction.piecewise_avgSlopeVar(DataCube[:,i,j],time,redn,gain)
+        if Config['CalculateVarienceImage']:
+            VarImg[i,j] = var
 
     header['NoNDR'] = (NoNDR, 'No of NDRs used in slope')
     header['EXPLNDR'] = (time[-1], 'Int Time of Last NDR used in slope')
@@ -151,7 +166,9 @@ def calculate_slope_image(UTRlist,Config):
     header['CUNITS'] = ('e-/sec','Units of the counts in image')
     header['EPADU'] = (gain,'Gain e/ADU')
     header['READNOS'] = (redn,'Single NDR Read Noise (e- rms)')
+    header['NOOFCRH'] = (len(CR_TIJ),'No of Cosmic Rays Hits detected')
     header['history'] = 'Slope image generated'
+    header['history'] = 'Cosmic Ray hits fixed in slope'
     hdu = fits.PrimaryHDU(slopeimg,header=header)
     hdulist = fits.HDUList([hdu])
 

@@ -2,7 +2,7 @@
 """ This tool is for recovering the slope/flux image from an HxRG readout data cube """
 from __future__ import division
 import numpy as np
-
+from scipy.ndimage import filters
 def subtract_reference_pixels(img,no_channels=32,statfunc=np.median):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
     Input:
@@ -183,6 +183,70 @@ def slope_img_from_cube(DataCube,time):
 
     return beta,alpha
 
+def varience_of_slope(slope,NoOfPoints,tframe,redn,gain):
+    """ Calculates the varience image of the slope (image) using the formula of Robberto 2010 (Eq 7) when m= 1 case.
+    Parameters:
+    -----------
+    slope: Fitted Slope
+    NoOfPoints : Number of points used in slope fitting.
+    tframe: Time between each data point (frame time)
+    refn: Read noise
+    gain: gain of the detector to estimate digitisation noise
+
+    Returns:
+    ---------
+    Varience : Varience of the slope estimate
+    """
+    Var = 6*(NoOfPoints**2 + 1)*slope / (5*NoOfPoints*(NoOfPoints**2 -1)*tframe) +\
+          12*(redn**2 + gain**2 / 12.)/(NoOfPoints*(NoOfPoints**2 -1)*tframe**2)
+    return Var
+
+def piecewise_avgSlopeVar(MaskedDataVector,time,redn,gain):
+    """ Returns the average slope and varience by estimating slope at each continous non masked 
+    regions in the input MaskedDataVector 
+    Parameters:
+    -----------
+    MaskedDataVector : Masked vector to fit slopes
+    time: Time vector for the data points
+    redn: Read noise for varience estimate
+    gain: gain of the detector to estimate digitisation noise
+
+    Returns:
+    ---------
+    AvgSlope : Weighted Average of piece wise slopes
+    Varience : Varience of the slope estimate
+    """    
+    localbeta = []
+    localn = []
+    localvar = []
+    #loop over each sections of the ramp.
+    slices = np.ma.notmasked_contiguous(MaskedDataVector)
+    if slices is None :  #When no unmasked pixels exist
+        return np.nan, np.nan
+
+    tf = np.median(np.diff(time)) # The frame time estimate
+    for k in range(len(slices)) :
+        n = len(MaskedDataVector[slices[k]])
+        if  n > 2 : #At least 3 points are there to calculate slope
+            t = time[slices[k]]
+            Sx = t.sum(dtype=np.float64)
+            Sxx = (np.square(t)).sum(dtype=np.float64)
+            Sy = MaskedDataVector[slices[k]].sum(dtype=np.float64)
+            Sxy = (MaskedDataVector[slices[k]]*t).sum(dtype=np.float64)
+            #append localbeta, localalpha, localn and localsigma
+            beta = (n*Sxy - Sx*Sy)/ (n*Sxx - Sx**2)
+            localbeta.append(beta)
+            localn.append(n)
+            localvar.append(varience_of_slope(beta,n,tf,redn,gain))
+            #calculate the average beta with weights 1/localvarience 
+            if len(localvar) > 0 : 
+                AvgSlope, weightsum =np.average(localbeta,weights=1.0/np.asarray(localvar),
+                                                returned=True)
+                Varience = 1/weightsum
+                return AvgSlope, Varience
+                
+            else :
+                return np.nan, np.nan
 
 def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
     """ Applies the classical non-linearity correction polynomial to Datacube 
@@ -218,3 +282,39 @@ def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
         OutDataCube = np.ma.masked_greater(OutDataCube,UpperThresh)
         
     return OutDataCube
+
+def abrupt_change_locations(DataCube,thresh=20):
+    """ Returns the array of positions at which abrupt change occured due to reset or Cosmic Ray hits.
+    Uses the [1,-3,3,-1] digital filter find abrupt changes.
+    Parameters:
+    -----------
+    DataCube   : Numpy 3d array.
+               Time axis should be axis=0
+    thresh (default: 20):
+               Threshold to detect the change in filter convolved image
+    Returns
+    -----------
+    (T,I,J) : The locations of abrupt changes like CR hit in the tuple of 3 arrays format (Time,I,J).
+    """
+    # Do a 3 pixels median filtering in the data to reduce the read noise in time series and preserve steps
+    if np.ma.isMaskedArray(DataCube) :
+        MFDataCube = filters.median_filter(DataCube.data,size=(3,1,1),mode='nearest')
+    else:
+        MFDataCube = filters.median_filter(DataCube,size=(3,1,1),mode='nearest')
+
+    convimg = MFDataCube[:-3,:,:] -3*MFDataCube[1:-2,:,:] +3*MFDataCube[2:-1,:,:] -MFDataCube[3:,:,:] #Convolution of image with [1,-3,3,-1] along time axis
+        
+    medianconv = np.median(convimg,axis=0)  #Wrongly nameing the variable now itself to conserve memory
+    stdconv = np.median(np.abs(convimg-medianconv),axis=0) * 1.4826  # Convert MAD to std  # MAD for robustnus
+    #We should remove all the points where number of data points were less than 5
+    stdconv[np.where(np.ma.count(DataCube,axis=0) < 5)] = 99999
+    # We should also remove any spuriously small stdeviation, say those lees than median std deviation  
+    MedianNoise = np.median(stdconv)
+    stdconv[np.where(stdconv < MedianNoise)] = MedianNoise  #This will prevent spuriously small std dev estimates
+    #Find the edges of ramp jumps.
+    if np.ma.isMaskedArray(DataCube) :
+        (T,I,J) = np.ma.where(np.ma.array(convimg-medianconv,mask=np.ma.getmaskarray(DataCube[3:,:,:])) > thresh*stdconv) 
+    else: 
+        (T,I,J) = np.ma.where(convimg-medianconv > thresh*stdconv)
+    T=T+2  #Converting to the original time coordinate of DataCube by correcting for the shifts. This T is the first pixel after CR hit
+    return T,I,J
