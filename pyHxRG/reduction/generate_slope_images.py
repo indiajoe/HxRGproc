@@ -169,12 +169,12 @@ def calculate_slope_image(UTRlist,Config):
     header['NOOFCRH'] = (len(CR_TIJ),'No of Cosmic Rays Hits detected')
     header['history'] = 'Slope image generated'
     header['history'] = 'Cosmic Ray hits fixed in slope'
-    hdu = fits.PrimaryHDU(slopeimg,header=header)
+    hdu = fits.PrimaryHDU(slopeimg.astype('float32'),header=header)
     hdulist = fits.HDUList([hdu])
 
     if Config['CalculateVarienceImage']:
         # Save the varience image as a fits extention
-        hduVar = fits.ImageHDU(VarImg)
+        hduVar = fits.ImageHDU(VarImg.astype('float32'))
         hduVar.header['CUNITS'] = ('(e-/sec)^2','Units of the counts in image')
         hduVar.header['COMMENT'] = 'Varience Image of the Slope image'
         # Create multi extension fits file
@@ -182,7 +182,7 @@ def calculate_slope_image(UTRlist,Config):
         
     if Config['UpperThreshold']:
         # Save the No# of NDRs used in each pixel also as a fits extension
-        hduNoNDRs = fits.ImageHDU(NoNDRArray)
+        hduNoNDRs = fits.ImageHDU(NoNDRArray.astype('int16'))
         hduNoNDRs.header['COMMENT'] = 'No# of NDRS used in Slope fitting'
         # Create multi extension fits file
         hdulist.append(hduNoNDRs)
