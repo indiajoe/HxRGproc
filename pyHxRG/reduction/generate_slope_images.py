@@ -91,9 +91,17 @@ def calculate_slope_image(UTRlist,Config):
     # Non-linearity Correction
     if Config['NonLinearCorrCoeff']:
         logging.info('Applying NonLinearity Corr:{0}'.format(Config['NonLinearCorrCoeff']))
-        DataCube = reduction.apply_nonlinearcorr_polynomial(DataCube,
-                                                            Config['NonLinearCorrCoeff'],
-                                                            UpperThresh=None)
+        if Config['NonLinearCorrCoeff'][0:4] == 'POLY':
+            # File name wiht POLY* is a polynomical correction
+            DataCube = reduction.apply_nonlinearcorr_polynomial(DataCube,
+                                                                Config['NonLinearCorrCoeff'],
+                                                                UpperThresh=None)
+        elif Config['NonLinearCorrCoeff'][0:4] == 'BSPL':
+            # File name with BSPL* is a BSpline correction
+            DataCube = reduction.apply_nonlinearcorr_bspline(DataCube,
+                                                             Config['NonLinearCorrCoeff'],
+                                                             UpperThresh=None, NoOfPreFrames=1)
+
     # Mask values above upper threshold before fitting slope
     if Config['UpperThreshold']:
         if isinstance(Config['UpperThreshold'],str):

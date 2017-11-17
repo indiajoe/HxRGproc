@@ -3,6 +3,10 @@
 from __future__ import division
 import numpy as np
 from scipy.ndimage import filters
+import pickle
+from functools32 import lru_cache
+from scipy import interpolate
+
 def subtract_reference_pixels(img,no_channels=32,statfunc=np.median):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
     Input:
@@ -282,6 +286,76 @@ def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
         OutDataCube = np.ma.masked_greater(OutDataCube,UpperThresh)
         
     return OutDataCube
+
+@lru_cache(maxsize=1)
+def Load_NonLinCorrBsplineDic(pklfilename):
+    """ Loads the pickled Bspline corefficent dictionary into a dictionary of Bsplines """
+    NLcorrTCKdic = pickle.load(open(pklfilename,'rb'))
+    BsplineDic = {}
+    for (i,j),tck in NLcorrTCKdic.iteritems():
+        try:
+            BsplineDic[i,j] = interpolate.BSpline(tck[0],tck[1],tck[2])
+        except TypeError:
+            # tck might be None for pixels with no corrections
+            BsplineDic[i,j] = None
+    return BsplineDic
+            
+
+def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreFrames=1):
+    """ Applies the non-linearity correction spline model to Datacube 
+    Parameters:
+    -----------
+    DataCube   : Numpy 3d array.
+               Time axis should be axis=0  [Warning: DataCube will be overwritten]
+    NLcorrTCKdic: String or Dictionary
+                Either the file name of the .pkl file which has the dictionary of non-linearity 
+                correction Bspline tck coefficents from which to create Bspline dic.
+                Or the dictionary of the Bsplines directly
+    UpperThresh: String or numpy 2d array (optional, default:None)
+                Upper Threshold value of the pixel count for each pixel above which non-linearity 
+                correction is unreliable and need to be masked.
+    NoOfPreFrames: float or numpy 2d array
+               This is the number of frames of flux which got subracted from the DataCube which
+               has to be added back before applying non-linearity curve.
+               For non-globel reset, this is typically = 1
+               For global reset this has to be a 2d array of exposure time in first readout.
+               If you set the value to 0, no extra flux will be added.
+               Only a rough and robust estimate of flux per pixel is made by taking the 
+                      median of differential counts.
+    Returns
+    -----------
+    OutDataCube: numpy ma masked 3d cube array
+                Outputs is the non linearity corrected 3d Datacube, 
+                If UpperThresh is provided it is a numpy masked ma array 
+                  with all values which was above UpperThresh masked.
+    
+    """
+    if isinstance(NLcorrTCKdic,str):
+        NLcorrTCKdic = Load_NonLinCorrBsplineDic(NLcorrTCKdic)
+
+    if NoOfPreFrames: # If NoOfPreFrames is not Zero, we have to caluclate flux and add
+        CrudeFlux = np.median(np.diff(DataCube,axis=0),axis=0)
+        # Add the Flux to DataCube
+        DataCube += CrudeFlux*NoOfPreFrames
+
+    OutDataCube = DataCube  # Overwrite the same array to save memory
+
+    # Do the Non-linearity correction
+    for (i,j),bspl in NLcorrTCKdic.iteritems():
+        try:
+            OutDataCube[i,j] = bspl(DataCube[i,j])
+        except TypeError:
+            # Bspline is None for pixels with no corrections
+            OutDataCube[i,j] = DataCube[i,j]
+
+    if UpperThresh is not None:
+        if isinstance(UpperThresh,str):
+            UpperThresh = np.load(UpperThresh)
+        # Mask all data above the threshold
+        OutDataCube = np.ma.masked_greater(OutDataCube,UpperThresh)
+        
+    return OutDataCube
+
 
 def abrupt_change_locations(DataCube,thresh=20):
     """ Returns the array of positions at which abrupt change occured due to reset or Cosmic Ray hits.
