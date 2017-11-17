@@ -343,10 +343,10 @@ def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreF
     # Do the Non-linearity correction
     for (i,j),bspl in NLcorrTCKdic.iteritems():
         try:
-            OutDataCube[i,j] = bspl(DataCube[i,j])
+            OutDataCube[:,i,j] = bspl(DataCube[:,i,j])
         except TypeError:
             # Bspline is None for pixels with no corrections
-            OutDataCube[i,j] = DataCube[i,j]
+            OutDataCube[:,i,j] = DataCube[:,i,j]
 
     if UpperThresh is not None:
         if isinstance(UpperThresh,str):
