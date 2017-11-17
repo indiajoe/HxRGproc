@@ -201,7 +201,7 @@ def varience_of_slope(slope,NoOfPoints,tframe,redn,gain):
     ---------
     Varience : Varience of the slope estimate
     """
-    Var = 6*(NoOfPoints**2 + 1)*slope / (5*NoOfPoints*(NoOfPoints**2 -1)*tframe) +\
+    Var = 6*(NoOfPoints**2 + 1)*np.abs(slope) / (5*NoOfPoints*(NoOfPoints**2 -1)*tframe) +\
           12*(redn**2 + gain**2 / 12.)/(NoOfPoints*(NoOfPoints**2 -1)*tframe**2)
     return Var
 
