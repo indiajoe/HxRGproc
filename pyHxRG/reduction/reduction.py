@@ -3,7 +3,7 @@
 from __future__ import division
 import numpy as np
 from scipy.ndimage import filters
-import pickle
+import cPickle
 from functools32 import lru_cache
 from scipy import interpolate
 
@@ -290,7 +290,7 @@ def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
 @lru_cache(maxsize=1)
 def Load_NonLinCorrBsplineDic(pklfilename):
     """ Loads the pickled Bspline corefficent dictionary into a dictionary of Bsplines """
-    NLcorrTCKdic = pickle.load(open(pklfilename,'rb'))
+    NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'))
     BsplineDic = {}
     for (i,j),tck in NLcorrTCKdic.iteritems():
         try:
