@@ -242,15 +242,15 @@ def piecewise_avgSlopeVar(MaskedDataVector,time,redn,gain):
             localbeta.append(beta)
             localn.append(n)
             localvar.append(varience_of_slope(beta,n,tf,redn,gain))
-            #calculate the average beta with weights 1/localvarience 
-            if len(localvar) > 0 : 
-                AvgSlope, weightsum =np.average(localbeta,weights=1.0/np.asarray(localvar),
-                                                returned=True)
-                Varience = 1/weightsum
-                return AvgSlope, Varience
-                
-            else :
-                return np.nan, np.nan
+    #calculate the average beta with weights 1/localvarience 
+    if len(localvar) > 0 : 
+        AvgSlope, weightsum =np.average(localbeta,weights=1.0/np.asarray(localvar),
+                                        returned=True)
+        Varience = 1/weightsum
+        return AvgSlope, Varience
+    else :
+        return np.nan, np.nan
+
 
 def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
     """ Applies the classical non-linearity correction polynomial to Datacube 
@@ -294,7 +294,7 @@ def Load_NonLinCorrBsplineDic(pklfilename):
     BsplineDic = {}
     for (i,j),tck in NLcorrTCKdic.iteritems():
         try:
-            BsplineDic[i,j] = interpolate.BSpline(tck[0],tck[1],tck[2])
+            BsplineDic[i,j] = interpolate.BSpline(tck[0],tck[1],tck[2],extrapolate=True)
         except TypeError:
             # tck might be None for pixels with no corrections
             BsplineDic[i,j] = None
