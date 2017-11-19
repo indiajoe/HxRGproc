@@ -413,9 +413,11 @@ def main_Teledyne():
         logging.info('Calculating slope for {0} Ramps in {1}'.format(len(SelectedRampList),InputDir))
 
         # To Run all in a single process serially. Very useful for debugging
-        # for Ramp in SelectedRampList:
-        #     TeledyneWindowsSlopeimageGenerator(Ramp)
-
+        if args.noCPUs == 1:
+            for Ramp in SelectedRampList:
+                TeledyneWindowsSlopeimageGenerator(Ramp)
+            logging.info('Finished {0}'.format(InputDir))
+            continue  # Continue with next InputDir
 
         # Make all the subprocesses inside the pool to ignore SIGINT
         original_sigint_handler = signal.signal(signal.SIGINT,signal.SIG_IGN)
