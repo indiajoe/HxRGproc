@@ -331,7 +331,7 @@ def parse_args_Teledyne():
     """ Parses the command line input arguments for Teledyne Software data reduction"""
     parser = argparse.ArgumentParser(description="Script to Generate Slope/Flux images from Up-the-Ramp data taken using Teledyne's Windows software")
     parser.add_argument('InputDir', type=str,
-                        help="Input Directory contiaining the Up-the-Ramp Raw data files")
+                        help="Input Directory contiaining the Up-the-Ramp Raw data files. Multiple directories can be provided comma seperated.")
     parser.add_argument('OutputMasterDir', type=str,
                         help="Output Master Directory to which output images to be written")
     parser.add_argument('ConfigFile', type=str,
@@ -368,70 +368,73 @@ def main_Teledyne():
                             filename=args.logfile, filemode='a')
         logging.getLogger().addHandler(logging.StreamHandler(sys.stdout)) # Sent info to the stdout as well
 
-    logging.info('Processing data in {0}'.format(args.InputDir))
+    InputDirList = args.InputDir.split(',')
 
-    Config = create_configdict_from_file(args.ConfigFile)
-    logging.info('Slope Configuration: {0}'.format(Config))
-    OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(args.InputDir.rstrip('/')))
-    RampFilenamePrefix = 'H2RG_R{0:02}_M'
+    for InputDir in InputDirList: 
+        logging.info('Processing data in {0}'.format(InputDir))
+
+        Config = create_configdict_from_file(args.ConfigFile)
+        logging.info('Slope Configuration: {0}'.format(Config))
+        OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(InputDir.rstrip('/')))
+        RampFilenamePrefix = 'H2RG_R{0:02}_M'
 
 
-    # Find the number of Ramps in the input Directory
-    imagelist = sorted((os.path.join(args.InputDir,f) for f in os.listdir(args.InputDir) if (os.path.splitext(f)[-1] == '.fits')))
-    RampList = sorted(set((int(re.search('H2RG_R(.+?)_M',os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
-    if args.NoNDR_Drop_G is None:
-        noNDR,noDrop,noG = estimate_NoNDR_Drop_G_TeledyneData(imagelist)
-    else:
-        noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
-    # Do sanity check that all the expected NDRS are available
-    ExpectedFramesPerRamp = noNDR*noG
-    RampTime = fits.getval(imagelist[0],'FRMTIME')*(noNDR+noDrop)*noG
-    TeledyneExtraHeaderCalculator = partial(ExtraHeaderCalculations4Windows,Ramptime=RampTime)
-
-    TeledyneWindowsSlopeimageGenerator = partial(generate_slope_image,
-                                                 InputDir=args.InputDir,OutputDir=OutputDir,
-                                                 Config = Config,
-                                                 OutputFilePrefix='Slope-R',
-                                                 FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
-                                                 RampFilenamePrefix=RampFilenamePrefix,
-                                                 FilenameSortKeyFunc = TeledyneFileNameSortKeyFunc,
-                                                 ExtraHeaderDictFunc= TeledyneExtraHeaderCalculator)
-
-    logging.info('Output slope images will be written to {0}'.format(OutputDir))
-    SelectedRampList = []
-    for Ramp in RampList:
-        NoofImages = len([f for f in  imagelist  if RampFilenamePrefix.format(Ramp) in os.path.basename(f)])
-        if  NoofImages == ExpectedFramesPerRamp:
-            SelectedRampList.append(Ramp)
+        # Find the number of Ramps in the input Directory
+        imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
+        RampList = sorted(set((int(re.search('H2RG_R(.+?)_M',os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+        if args.NoNDR_Drop_G is None:
+            noNDR,noDrop,noG = estimate_NoNDR_Drop_G_TeledyneData(imagelist)
         else:
-            logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
-            logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
-            
-    logging.info('Calculating slope for {0} Ramps in {1}'.format(len(SelectedRampList),args.InputDir))
+            noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
+        # Do sanity check that all the expected NDRS are available
+        ExpectedFramesPerRamp = noNDR*noG
+        RampTime = fits.getval(imagelist[0],'FRMTIME')*(noNDR+noDrop)*noG
+        TeledyneExtraHeaderCalculator = partial(ExtraHeaderCalculations4Windows,Ramptime=RampTime)
 
-    # To Run all in a single process serially. Very useful for debugging
-    # for Ramp in SelectedRampList:
-    #     TeledyneWindowsSlopeimageGenerator(Ramp)
+        TeledyneWindowsSlopeimageGenerator = partial(generate_slope_image,
+                                                     InputDir=InputDir,OutputDir=OutputDir,
+                                                     Config = Config,
+                                                     OutputFilePrefix='Slope-R',
+                                                     FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
+                                                     RampFilenamePrefix=RampFilenamePrefix,
+                                                     FilenameSortKeyFunc = TeledyneFileNameSortKeyFunc,
+                                                     ExtraHeaderDictFunc= TeledyneExtraHeaderCalculator)
+
+        logging.info('Output slope images will be written to {0}'.format(OutputDir))
+        SelectedRampList = []
+        for Ramp in RampList:
+            NoofImages = len([f for f in  imagelist  if RampFilenamePrefix.format(Ramp) in os.path.basename(f)])
+            if  NoofImages == ExpectedFramesPerRamp:
+                SelectedRampList.append(Ramp)
+            else:
+                logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
+                logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
+
+        logging.info('Calculating slope for {0} Ramps in {1}'.format(len(SelectedRampList),InputDir))
+
+        # To Run all in a single process serially. Very useful for debugging
+        # for Ramp in SelectedRampList:
+        #     TeledyneWindowsSlopeimageGenerator(Ramp)
 
 
-    # Make all the subprocesses inside the pool to ignore SIGINT
-    original_sigint_handler = signal.signal(signal.SIGINT,signal.SIG_IGN)
-    pool = Pool(processes=args.noCPUs)
-    # Make the parent process catch SIGINT by restoring
-    signal.signal(signal.SIGINT,original_sigint_handler)
-    try:
-        outputfiles = pool.map_async(TeledyneWindowsSlopeimageGenerator,SelectedRampList)
-        MaximumRunTime = 2*24*60*60 # Two days
-        outputfiles.get(MaximumRunTime) # Wait till everything is over
-    except KeyboardInterrupt:
-        logging.critical('SIGINT Keyboard Interrupt Recevied... Shutting down the script..')
-        pool.terminate()
-    except TimeoutError:
-        logging.critical('TIMEOUT Error. Shutting down the script. (Timeout ={0}s)'.format(MaximumRunTime))
-        pool.terminate()
-    else:
-        pool.close()
-        logging.info('Finished {0}'.format(args.InputDir))
+        # Make all the subprocesses inside the pool to ignore SIGINT
+        original_sigint_handler = signal.signal(signal.SIGINT,signal.SIG_IGN)
+        pool = Pool(processes=args.noCPUs)
+        # Make the parent process catch SIGINT by restoring
+        signal.signal(signal.SIGINT,original_sigint_handler)
+        try:
+            outputfiles = pool.map_async(TeledyneWindowsSlopeimageGenerator,SelectedRampList)
+            MaximumRunTime = 2*24*60*60 # Two days
+            outputfiles.get(MaximumRunTime) # Wait till everything is over
+        except KeyboardInterrupt:
+            logging.critical('SIGINT Keyboard Interrupt Recevied... Shutting down the script..')
+            pool.terminate()
+        except TimeoutError:
+            logging.critical('TIMEOUT Error. Shutting down the script. (Timeout ={0}s)'.format(MaximumRunTime))
+            pool.terminate()
+        else:
+            pool.close()
+            logging.info('Finished {0}'.format(InputDir))
 
 ###############################################
 
