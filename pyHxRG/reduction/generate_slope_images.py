@@ -18,6 +18,7 @@ import logging
 import signal
 import traceback
 import ConfigParser
+from scipy.interpolate import interp1d
 from . import reduction 
 
 
@@ -74,19 +75,27 @@ def calculate_slope_image(UTRlist,Config):
     Returns:
          Slopeimage hdulist object, header
 """
-    time = np.array([fits.getval(f,'INTTIME') for f in UTRlist])
+    HDR_INTTIME = ReadOutSoftware[Config['ReadoutSoftware']]['HDR_INTTIME']
+    HDR_NOUTPUTS = ReadOutSoftware[Config['ReadoutSoftware']]['HDR_NOUTPUTS']
+    # Fix any fixes needed for raw header as well as any artifacts in DataCube
+    FixHeader_func = ReadOutSoftware[Config['ReadoutSoftware']]['FixHeader_func']
+    FixDataCube_func = ReadOutSoftware[Config['ReadoutSoftware']]['FixDataCube_func']
     DataCube, header = LoadDataCube(UTRlist) 
+    header = FixHeader_func(header)
+    DataCube = FixDataCube_func(DataCube)
+    time = np.array([FixHeader_func(fits.getheader(f))[HDR_INTTIME] for f in UTRlist])
+
     NoNDR = DataCube.shape[0]
     logging.info('Number of NDRs = {0}'.format(NoNDR))
     # Bias level corrections
     if Config['DoPedestalSubtraction']: 
         logging.info('Subtracted Pedestal')
         DataCube = reduction.remove_biases_in_cube(DataCube,time=time,
-                                                   no_channels=header['NOUTPUTS'],
+                                                   no_channels=header[HDR_NOUTPUTS],
                                                    do_LSQmedian_correction=Config['DoLSQmedianCorrection'])
     else:
         DataCube = reduction.remove_bias_preservepedestal_in_cube(DataCube,
-                                                                  no_channels=header['NOUTPUTS'])
+                                                                  no_channels=header[HDR_NOUTPUTS])
 
     # Non-linearity Correction
     if Config['NonLinearCorrCoeff']:
@@ -200,9 +209,9 @@ def calculate_slope_image(UTRlist,Config):
 # @pack_traceback_to_errormsg can be commented out when function not used in multiprocess
 @pack_traceback_to_errormsg
 @LogMemoryErrors
-def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFilePrefix='Slope-R',
+def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFileFormat='Slope-R{0}.fits',
                          FirstNDR = 0, LastNDR = None,
-                         RampFilenamePrefix='H2RG_R{0:02}_M',
+                         RampFilenameString='H2RG_R{0:02}_M',
                          FilenameSortKeyFunc = None,
                          ExtraHeaderDictFunc= None):
     """ 
@@ -212,10 +221,10 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFilePrefix='Sl
         InputDir: (str) Input Directory containing the UTR files
         OutputDir: (str) Output Directory to write output slope images into
         Config: Configuration dictionary imported from the Config file
-        OutputFilePrefix: (str,optional) Output file prefix (default: 'Slope-R')
+        OutputFileFormat: (str,optional) Output file format (default: 'Slope-R{0}.fits')
         FirstNDR = (int,optional) Number of initial NDRs to skip for slope fitting (default: 0) 
         LastNDR = (int/None,optional) Number of the maximum NDR to use in slope fitting (default: None means all)
-        RampFilenamePrefix= (str,optional) Filenmae format which uniquely identifies a particular Ramp file (Default: 'H2RG_R{0:02}_M')
+        RampFilenameString= (str,optional) Filename substring format which uniquely identifies a particular Ramp file (Default: 'H2RG_R{0:02}_M')
         FilenameSortKeyFunc = (func) Function(filename) which returns the key to use for sorting filenames
         ExtraHeaderDictFunc= (func,None optinal) Function(header) which returns a dictionary of any extra header keywords 
                              to add. (Default : None)
@@ -228,7 +237,7 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFilePrefix='Sl
         logging.warning('No function to sort filename provided, using default filename sorting..')
         FilenameSortKeyFunc = lambda f: f
 
-    OutputFileName = os.path.join(OutputDir,OutputFilePrefix+'{0}.fits'.format(RampNo))
+    OutputFileName = os.path.join(OutputDir,OutputFileFormat.format(RampNo))
     try:
         os.makedirs(OutputDir)
     except OSError as e:
@@ -241,7 +250,7 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFilePrefix='Sl
         return None
         
     # First search for all raw files
-    UTRlistT = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits') and (RampFilenamePrefix.format(RampNo) in os.path.basename(f))))
+    UTRlistT = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits') and (RampFilenameString.format(RampNo) in os.path.basename(f))))
     UTRlist = sorted(UTRlistT,key=FilenameSortKeyFunc)
 
     if LastNDR is None:
@@ -257,7 +266,7 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFilePrefix='Sl
 
 
 #### Functions specific to help reduce Windows Teledyne software data
-def TeledyneFileNameSortKeyFunc(fname):
+def FileNameSortKeyFunc_Teledyne(fname):
     """ Function which returns the key to sort Teledyne filename """
     return tuple(map(int,re.search('H2RG_R(.+?)_M(.+?)_N(.+?).fits',os.path.basename(fname)).group(1,2,3)))
 
@@ -296,6 +305,41 @@ def estimate_NoNDR_Drop_G_TeledyneData(imagelist):
     logging.info('Estimated Number of (NDRs in Group: Drops: Groups) = {0}:{1}:{2}'.format(noNDR,NoOfDrops,noG))
     return noNDR,NoOfDrops,noG
 
+#### Functions specific to reduce HPFLinux software data
+def FileNameSortKeyFunc_HPFLinux(fname):
+    """ Function which returns the key to sort HPFLinux filename """
+    return tuple(map(int,re.search('hpf_(\d+?)T(\d+?)_R(\d+?)_F(\d+?).fits',os.path.basename(fname)).group(1,2,3,4)))
+
+def FixHeader_func_HPFLinux(header):
+    """ Funtion to fix any missing headers needed in header """
+    if 'ITIME' not in header:
+        try:
+            FrameTime = header['FRMTIME']
+        except KeyError:
+            if header['CHANNELS'] == 4:
+                FrameTime = 10.48576 
+            elif header['CHANNELS'] == 32:
+                FrameTime = 10.48576/8. 
+            else:
+                raise
+        
+        header['ITIME'] = header['FRAMENUM']*FrameTime
+    return header
+
+def FixDataCube_func_HPFLinux(DataCube):
+    """Fixes the zero readout rows in datacube """
+    if np.any(DataCube[:,:,-1] == 0) : # Fix last blank column
+        DataCube[:,:,-1] = DataCube[:,:,-2]
+
+    ZeroMask = DataCube == 0
+    IJZeroMask = np.any(ZeroMask,axis=0)
+    t = np.arange(DataCube.shape[0])
+    for i,j in zip(*np.where(IJZeroMask)):
+        import pdb; pdb.set_trace()
+        f = interp1d(t[~ZeroMask[:,i,j]],DataCube[:,i,j][~ZeroMask[:,i,j]],kind='linear',fill_value='extrapolate')
+        DataCube[:,i,j][ZeroMask[:,i,j]] = f(t[ZeroMask[:,i,j]])
+
+    return DataCube
 #####
 
 def parse_str_to_types(string):
@@ -325,11 +369,13 @@ def create_configdict_from_file(configfilename):
     Config = {}
     for key,value in Configloader.items('slope_settings'):
         Config[key] = parse_str_to_types(value)
+    for key,value in Configloader.items('filename_settings'):
+        Config[key] = parse_str_to_types(value)
     return Config
 
-def parse_args_Teledyne():
-    """ Parses the command line input arguments for Teledyne Software data reduction"""
-    parser = argparse.ArgumentParser(description="Script to Generate Slope/Flux images from Up-the-Ramp data taken using Teledyne's Windows software")
+def parse_args():
+    """ Parses the command line input arguments for HxRG data reduction"""
+    parser = argparse.ArgumentParser(description="Script to Generate Slope/Flux images from Up-the-Ramp data taken using Teledyne's HxRG detector")
     parser.add_argument('InputDir', type=str,
                         help="Input Directory contiaining the Up-the-Ramp Raw data files. Multiple directories can be provided comma seperated.")
     parser.add_argument('OutputMasterDir', type=str,
@@ -352,12 +398,12 @@ def parse_args_Teledyne():
     args = parser.parse_args()
     return args
     
-def main_Teledyne():
-    """ Standalone Script to generate Slope images from Up the Ramp data taken using Teledyne's Windows software"""
+def main():
+    """ Standalone Script to generate Slope images from Up the Ramp data taken using Teledyne's HxRG detector"""
     # Override the default exception hook with our custom handler
     sys.excepthook = log_all_uncaughtexceptions_handler
 
-    args = parse_args_Teledyne()    
+    args = parse_args()    
 
     if args.logfile is None:
         logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s',
@@ -376,49 +422,65 @@ def main_Teledyne():
         Config = create_configdict_from_file(args.ConfigFile)
         logging.info('Slope Configuration: {0}'.format(Config))
         OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(InputDir.rstrip('/')))
-        RampFilenamePrefix = 'H2RG_R{0:02}_M'
 
 
         # Find the number of Ramps in the input Directory
         imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
-        RampList = sorted(set((int(re.search('H2RG_R(.+?)_M',os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+        RampidRegexp = ReadOutSoftware[Config['ReadoutSoftware']]['RampidRegexp']
+        RampList = sorted(set((re.search(RampidRegexp,os.path.basename(f)).group(1) for f in imagelist))) # Ex: 45 in H2RG_R45_M01_N01.fits
         if not RampList:
             logging.info('No images to process in {0}'.format(InputDir))
             continue # skip to next directory
+        noNDR = None
+
+        ExtraHeaderCalculator = ReadOutSoftware[Config['ReadoutSoftware']]['ExtraHeaderCalculations_func']
+
         if args.NoNDR_Drop_G is None:
-            noNDR,noDrop,noG = estimate_NoNDR_Drop_G_TeledyneData(imagelist)
+            estimate_NoNDR_Drop_G_func = ReadOutSoftware[Config['ReadoutSoftware']]['estimate_NoNDR_Drop_G_func']
+            if estimate_NoNDR_Drop_G_func is not None:
+                noNDR,noDrop,noG = estimate_NoNDR_Drop_G_func(imagelist)
         else:
             noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
-        # Do sanity check that all the expected NDRS are available
-        ExpectedFramesPerRamp = noNDR*noG
-        RampTime = fits.getval(imagelist[0],'FRMTIME')*(noNDR+noDrop)*noG
-        TeledyneExtraHeaderCalculator = partial(ExtraHeaderCalculations4Windows,Ramptime=RampTime)
 
-        TeledyneWindowsSlopeimageGenerator = partial(generate_slope_image,
-                                                     InputDir=InputDir,OutputDir=OutputDir,
-                                                     Config = Config,
-                                                     OutputFilePrefix='Slope-R',
-                                                     FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
-                                                     RampFilenamePrefix=RampFilenamePrefix,
-                                                     FilenameSortKeyFunc = TeledyneFileNameSortKeyFunc,
-                                                     ExtraHeaderDictFunc= TeledyneExtraHeaderCalculator)
+        # Do sanity check that all the expected NDRS are available
+        if noNDR is not None:
+            ExpectedFramesPerRamp = noNDR*noG
+            if Config['ReadoutSoftware'] == 'TeledyneWindows':
+                RampTime = fits.getval(imagelist[0],'FRMTIME')*(noNDR+noDrop)*noG
+                ExtraHeaderCalculator = partial(ExtraHeaderCalculator,Ramptime=RampTime)
+        else:
+            ExpectedFramesPerRamp = None
+
+        RampFilenameString = ReadOutSoftware[Config['ReadoutSoftware']]['RampFilenameString']
+        FileNameSortKeyFunc = ReadOutSoftware[Config['ReadoutSoftware']]['filename_sort_func']
+        SlopeimageGenerator = partial(generate_slope_image,
+                                      InputDir=InputDir,OutputDir=OutputDir,
+                                      Config = Config,
+                                      OutputFileFormat=Config['OutputFileFormat'],
+                                      FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
+                                      RampFilenameString = RampFilenameString,
+                                      FilenameSortKeyFunc = FileNameSortKeyFunc,
+                                      ExtraHeaderDictFunc= ExtraHeaderCalculator)
 
         logging.info('Output slope images will be written to {0}'.format(OutputDir))
-        SelectedRampList = []
-        for Ramp in RampList:
-            NoofImages = len([f for f in  imagelist  if RampFilenamePrefix.format(Ramp) in os.path.basename(f)])
-            if  NoofImages == ExpectedFramesPerRamp:
-                SelectedRampList.append(Ramp)
-            else:
-                logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
-                logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
+        if ExpectedFramesPerRamp is not None:
+            SelectedRampList = []
+            for Ramp in RampList:
+                NoofImages = len([f for f in  imagelist  if RampFilenameString.format(Ramp) in os.path.basename(f)])
+                if  NoofImages == ExpectedFramesPerRamp:
+                    SelectedRampList.append(Ramp)
+                else:
+                    logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
+                    logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
+        else:
+            SelectedRampList = RampList
 
         logging.info('Calculating slope for {0} Ramps in {1}'.format(len(SelectedRampList),InputDir))
 
         # To Run all in a single process serially. Very useful for debugging
         if args.noCPUs == 1:
             for Ramp in SelectedRampList:
-                TeledyneWindowsSlopeimageGenerator(Ramp)
+                SlopeimageGenerator(Ramp)
             logging.info('Finished {0}'.format(InputDir))
             continue  # Continue with next InputDir
 
@@ -428,7 +490,7 @@ def main_Teledyne():
         # Make the parent process catch SIGINT by restoring
         signal.signal(signal.SIGINT,original_sigint_handler)
         try:
-            outputfiles = pool.map_async(TeledyneWindowsSlopeimageGenerator,SelectedRampList)
+            outputfiles = pool.map_async(SlopeimageGenerator,SelectedRampList)
             MaximumRunTime = 2*24*60*60 # Two days
             outputfiles.get(MaximumRunTime) # Wait till everything is over
         except KeyboardInterrupt:
@@ -442,7 +504,31 @@ def main_Teledyne():
             logging.info('Finished {0}'.format(InputDir))
 
 ###############################################
+# Register functions which are specific to each readout software output in dictionary below
+ReadOutSoftware = {
+    'TeledyneWindows':{'RampFilenameString' : 'H2RG_R{0}_M', #Input filename structure with Ramp id substitution
+                       'RampidRegexp' : 'H2RG_R(.+?)_M', # Regexp to extract unique Ramp id from filename
+                       'HDR_NOUTPUTS' : 'NOUTPUTS', # Fits header for number of output channels
+                       'HDR_INTTIME' : 'INTTIME', # Fits header for accumulated exposure time in each NDR
+                       'filename_sort_func' : FileNameSortKeyFunc_Teledyne,
+                       'FixHeader_func': lambda hdr: hdr, # Optional function call to fix input raw header
+                       'FixDataCube_func': lambda Dcube: Dcube, # Optional function call to fix input Data Cube
+                       'estimate_NoNDR_Drop_G_func' : estimate_NoNDR_Drop_G_TeledyneData,
+                       'ExtraHeaderCalculations_func' : ExtraHeaderCalculations4Windows},
+
+    'HPFLinux':{'RampFilenameString' : 'hpf_{0}_F', #Input filename structure with Ramp id substitution
+                'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
+                'HDR_NOUTPUTS' : 'CHANNELS', # Fits header for number of output channels
+                'HDR_INTTIME' : 'ITIME', # Fits header for accumulated exposure time in each NDR
+                'filename_sort_func': FileNameSortKeyFunc_HPFLinux,
+                'FixHeader_func': FixHeader_func_HPFLinux, # Optional function call to fix input raw header
+                'FixDataCube_func': FixDataCube_func_HPFLinux, # Optional function call to fix input Data Cube
+                'estimate_NoNDR_Drop_G_func':None,
+                'ExtraHeaderCalculations_func':None},
+    }
+
+
 
 if __name__ == "__main__":
-    main_Teledyne()
+    main()
     
