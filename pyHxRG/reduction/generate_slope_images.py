@@ -423,6 +423,7 @@ def main():
         logging.info('Slope Configuration: {0}'.format(Config))
         OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(InputDir.rstrip('/')))
 
+        InputDir = os.path.join(InputDir,Config['InputSubDir']) # Append any redundant input subdirectory to be added
 
         # Find the number of Ramps in the input Directory
         imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
