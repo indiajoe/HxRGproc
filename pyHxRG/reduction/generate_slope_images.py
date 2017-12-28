@@ -167,13 +167,17 @@ def calculate_slope_image(UTRlist,Config):
         tf = np.median(np.diff(time)) # The frame time estimate
         VarImg = reduction.varience_of_slope(slopeimg,NoNDRArray,tf,redn,gain)
 
-    # ReCalculate correct slope for Cosmic ray hit points
-    logging.info('Fixing {0} CR hit slopes..'.format(len(CR_TIJ)))
-    DataCube[zip(*CR_TIJ)] = np.ma.masked  # Mask all points just after CR hit
-    for t,i,j in CR_TIJ:
-        slopeimg[i,j], var = reduction.piecewise_avgSlopeVar(DataCube[:,i,j],time,redn,gain)
-        if Config['CalculateVarienceImage']:
-            VarImg[i,j] = var
+    TotalCRhits = len(CR_TIJ)
+    if TotalCRhits < Config['MaxNoOfCRfix']:
+        # ReCalculate correct slope for Cosmic ray hit points
+        logging.info('Fixing {0} CR hit slopes..'.format(TotalCRhits))
+        DataCube[zip(*CR_TIJ)] = np.ma.masked  # Mask all points just after CR hit
+        for t,i,j in CR_TIJ:
+            slopeimg[i,j], var = reduction.piecewise_avgSlopeVar(DataCube[:,i,j],time,redn,gain)
+            if Config['CalculateVarienceImage']:
+                VarImg[i,j] = var
+    else:
+        logging.info('UnFixed {0} CR hits..'.format(TotalCRhits))
 
     header['NoNDR'] = (NoNDR, 'No of NDRs used in slope')
     header['EXPLNDR'] = (time[-1], 'Int Time of Last NDR used in slope')
@@ -183,7 +187,7 @@ def calculate_slope_image(UTRlist,Config):
     header['CUNITS'] = ('e-/sec','Units of the counts in image')
     header['EPADU'] = (gain,'Gain e/ADU')
     header['READNOS'] = (redn,'Single NDR Read Noise (e- rms)')
-    header['NOOFCRH'] = (len(CR_TIJ),'No of Cosmic Rays Hits detected')
+    header['NOOFCRH'] = (TotalCRhits,'No of Cosmic Rays Hits detected')
     header['history'] = 'Slope image generated'
     header['history'] = 'Cosmic Ray hits fixed in slope'
     hdu = fits.PrimaryHDU(slopeimg.astype('float32'),header=header)
