@@ -335,7 +335,6 @@ def FixDataCube_func_HPFLinux(DataCube):
     IJZeroMask = np.any(ZeroMask,axis=0)
     t = np.arange(DataCube.shape[0])
     for i,j in zip(*np.where(IJZeroMask)):
-        import pdb; pdb.set_trace()
         f = interp1d(t[~ZeroMask[:,i,j]],DataCube[:,i,j][~ZeroMask[:,i,j]],kind='linear',fill_value='extrapolate')
         DataCube[:,i,j][ZeroMask[:,i,j]] = f(t[ZeroMask[:,i,j]])
 
