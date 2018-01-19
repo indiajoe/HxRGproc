@@ -6,6 +6,7 @@ from scipy.ndimage import filters
 import cPickle
 from functools32 import lru_cache
 from scipy import interpolate
+import logging
 
 def subtract_reference_pixels(img,no_channels=32,statfunc=np.median):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
@@ -42,12 +43,13 @@ def fit_slope_zeroIntercept_residue(X,Y):
     slope = np.sum(Y*X)/np.sum(np.power(X,2))
     return  slope*X - Y 
 
-def subtract_median_bias_residue_channel(ChannelCube,time=None):
+def subtract_median_bias_residue_channel(ChannelCube,time=None,percentile=50):
     """ Returns the median residue corrected channel strip cube.
     Input:
        ChannelCube: 3D cube data of just one channel strip. 
              Very Important: Cube should be already pedestal subtracted, and Reference pixel bias subtracted.
        time: (optional) epochs of the NDR readouts in the data cube. (default: uniform cadence)
+       percentile: 50 is median. Give number between 0 and 100 to choose the percentile of counts to use for slope calculation.
     Output:
        CorrectedChannelCube: 3D cube of residue corrected channels.
            The residue is calculated by the following technique.
@@ -64,26 +66,28 @@ def subtract_median_bias_residue_channel(ChannelCube,time=None):
         time = np.arange(ChannelCube.shape[0])
     hsize = int(ChannelCube.shape[1]/2)
 
-    TopBiasResidue = fit_slope_zeroIntercept_residue(time,[np.median(tile) for tile in ChannelCube[:,0:hsize,:]])
-    BotBiasResidue = fit_slope_zeroIntercept_residue(time,[np.median(tile) for tile in ChannelCube[:,hsize:,:]])
+    TopBiasResidue = fit_slope_zeroIntercept_residue(time,[np.percentile(tile,percentile) for tile in ChannelCube[:,0:hsize,:]])
+    BotBiasResidue = fit_slope_zeroIntercept_residue(time,[np.percentile(tile,percentile) for tile in ChannelCube[:,hsize:,:]])
     
     ResidueCorrectionSlopes = (TopBiasResidue - BotBiasResidue)/(hsize/2 - (hsize + hsize/2))
     x = np.arange(ChannelCube.shape[1])
     ResidueCorrection = BotBiasResidue[:,np.newaxis] + ResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
     return ChannelCube + ResidueCorrection[:,:,np.newaxis]
 
-def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
+def subtract_median_bias_residue(DataCube,no_channels=32,time=None, percentile=50):
     """ Returns the median residue bias corrected data cube.
     Input: 
         DataCube: The 3D pedestal subtracted, and reference pixel subracted Data Cube. 
         no_channels: Number of channels used in readout. (default:32)
         time: (optional) epochs of the NDR readouts in the data cube. (default: uniform cadence)
+        percentile: 50 is median. Give number between 0 and 100 to choose the percentile of counts to use for slope calculation.
+
     Output:
         BiasCorrectionCorrectedCube : 3D cube after correcting the bias corrections across channel
     """
     CorrectedCubes = []
     for ChannelCube in np.split(DataCube,np.arange(1,no_channels)*int(2048/no_channels),axis=2):
-        CorrectedCubes.append( subtract_median_bias_residue_channel(ChannelCube,time=time) )
+        CorrectedCubes.append( subtract_median_bias_residue_channel(ChannelCube,time=time,percentile=percentile) )
     return np.dstack(CorrectedCubes)
         
 
@@ -116,8 +120,8 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     if do_LSQmedian_correction:
         # Step 4: After the previous step the errors in the bias corrections are Gaussian, since it comes 
         # from the error in estimate of bias from small number of reference pixels.
-        # So, in the next step we shall fit straight line to the full median image sections of each strip and estimate residual bias corrections.
-        DataCube = subtract_median_bias_residue(DataCube,no_channels=no_channels,time=time)
+        # So, in the next step we shall fit straight line to the full 25 percentile image sections of each strip and estimate residual bias corrections.
+        DataCube = subtract_median_bias_residue(DataCube,no_channels=no_channels,time=time, percentile=25)
 
     return DataCube
 
@@ -298,6 +302,10 @@ def Load_NonLinCorrBsplineDic(pklfilename):
         except TypeError:
             # tck might be None for pixels with no corrections
             BsplineDic[i,j] = None
+        except ValueError:
+            logging.error("Insufficent coeffs for {0},{1}: {2}".format(i,j,tck))
+            BsplineDic[i,j] = None
+
     return BsplineDic
             
 
