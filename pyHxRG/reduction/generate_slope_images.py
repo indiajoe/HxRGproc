@@ -143,9 +143,11 @@ def calculate_slope_image(UTRlist,Config):
     # Use the [1,-3,3,-1] digital filter to detect abrupt changes in the up-the-ramp
     T,I,J = reduction.abrupt_change_locations(DataCube,thresh=20)
     CR_TIJ = [] # Cosmicray events list
+    ResetAnomalyPixels = set()
     for t,i,j in zip(T,I,J):
         if t <=2:
             DataCube[:2,i,j] = np.ma.masked
+            ResetAnomalyPixels.add((i,j))
         else:
             CR_TIJ.append((t,i,j))  # save pure CR events
 
@@ -188,6 +190,7 @@ def calculate_slope_image(UTRlist,Config):
     header['EPADU'] = (gain,'Gain e/ADU')
     header['READNOS'] = (redn,'Single NDR Read Noise (e- rms)')
     header['NOOFCRH'] = (TotalCRhits,'No of Cosmic Rays Hits detected')
+    header['NRESETA'] = (len(ResetAnomalyPixels),'No of Reset Anomaly pixels detected')
     header['history'] = 'Slope image generated'
     header['history'] = 'Cosmic Ray hits fixed in slope'
     hdu = fits.PrimaryHDU(slopeimg.astype('float32'),header=header)
