@@ -129,7 +129,8 @@ def create_an_html_list(ListOfEntires,tag='ul'):
     
 def create_summary_report(DataDir,OutReportDir):
     """ Creates a Summary of fits files in DataDir into OutReportDir """
-    OutFigureDir = os.path.join(OutReportDir,'figures')
+    FigureDIR = 'figures' # Sub-directory to keep figures in
+    OutFigureDir = os.path.join(OutReportDir,FigureDIR)
 
     HTMLDic = {'PageTitle': 'Summary of Slope Images'}
 
@@ -142,20 +143,20 @@ def create_summary_report(DataDir,OutReportDir):
     TableHeader = create_an_html_table_row(['Filename','Image','Column plot','UTR plot','Quantities'],tag='th')
     TableRowsList = []
     for fitsfile in sorted(files_in_dir(DataDir,pattern='*.fits')):
-        logging.info('Reporting {0}'.format(fitsfile))
+        logging.info('Analysing {0}'.format(fitsfile))
         ofitsfile = fitsfile.replace(os.path.sep,'_')
         # First create a postage stamp of the image
         OutImageName = os.path.join(OutFigureDir,ofitsfile+'.png')
         OutImageName = save_img(fitsfile,OutImageName)
-        oOutImageName = os.path.join(*OutImageName.split(os.path.sep)[1:])
+        oOutImageName = os.path.join(FigureDIR,os.path.split(OutImageName)[-1]) # out path for html page
         # Save the vertical median plot
         ColumnMedianPlotName = os.path.join(OutFigureDir,ofitsfile+'_Col_median.png')
         ColumnMedianPlotName = save_column_median_plot(fitsfile,ColumnMedianPlotName)
-        oColumnMedianPlotName = os.path.join(*ColumnMedianPlotName.split(os.path.sep)[1:])
+        oColumnMedianPlotName = os.path.join(FigureDIR,os.path.split(ColumnMedianPlotName)[-1])
         #Save the up-the-ramp Diagnositc plot
         UTR_DignoPlotName = os.path.join(OutFigureDir,ofitsfile+'_utr_plot.png')
         UTR_DignoPlotName = save_UTR_diagnostic_plot(fitsfile,UTR_DignoPlotName,ext=3)
-        oUTR_DignoPlotName = os.path.join(*UTR_DignoPlotName.split(os.path.sep)[1:])
+        oUTR_DignoPlotName = os.path.join(FigureDIR,os.path.split(UTR_DignoPlotName)[-1])
         # List of Diagnostic Quantities
         List_of_Diagnostic_Quant = list_diagnostic_quantities(fitsfile)
         
@@ -178,9 +179,9 @@ def create_summary_report(DataDir,OutReportDir):
 
 def main():
     logging.basicConfig(level=logging.INFO)
-    DataDir = sys.argv[1]
-    OutReportDir = sys.argv[2]
-    _ = create_summary_report(DataDir,OutReportDir)
+    OutMasterReportDir = sys.argv[-1]
+    for DataDir in sys.argv[1:-1]:
+        _ = create_summary_report(DataDir,os.path.join(OutMasterReportDir,DataDir))
 
 
 if __name__ == "__main__":
