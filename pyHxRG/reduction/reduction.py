@@ -28,9 +28,17 @@ def subtract_reference_pixels(img,no_channels=32,statfunc=np.median):
 """
     correctedStrips = []
     for channelstrip in np.split(img,np.arange(1,no_channels)*int(2048/no_channels),axis=1):
-        topRef = np.mean([statfunc(channelstrip[:4,0::2]),statfunc(channelstrip[:4,1::2])])  # Calculate mean of median/mean of odd and even columns                    
-        botRef = np.mean([statfunc(channelstrip[-4:,0::2]),statfunc(channelstrip[-4:,1::2])])
-        correctedStrips.append(channelstrip - np.linspace(topRef,botRef,channelstrip.shape[0])[:,np.newaxis])
+        # Correct odd and even columns seperately
+        topRefeven = statfunc(channelstrip[:4,0::2])
+        topRefodd = statfunc(channelstrip[:4,1::2])  # Calculate median/mean of odd and even columns                    
+        botRefeven = statfunc(channelstrip[-4:,0::2])
+        botRefodd = statfunc(channelstrip[-4:,1::2])
+
+        Corrected_channelstrip = channelstrip.copy()
+        Corrected_channelstrip[:,0::2] = channelstrip[:,0::2] - np.linspace(topRefeven,botRefeven,channelstrip.shape[0])[:,np.newaxis]
+        Corrected_channelstrip[:,1::2] = channelstrip[:,1::2] - np.linspace(topRefodd,botRefodd,channelstrip.shape[0])[:,np.newaxis]
+
+        correctedStrips.append(Corrected_channelstrip)
 
     HRefSubtractedImg = np.hstack(correctedStrips)
     VRef = statfunc(np.hstack((HRefSubtractedImg[:,:4],HRefSubtractedImg[:,-4:])),axis=1)
