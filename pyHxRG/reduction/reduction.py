@@ -51,6 +51,20 @@ def fit_slope_zeroIntercept_residue(X,Y):
     slope = np.sum(Y*X)/np.sum(np.power(X,2))
     return  slope*X - Y 
 
+def fit_slope_andget_residue(X,Y):
+    """ Returns the residue of a LSQ fitted straight line Y = mX +c """
+    X = np.array(X)
+    Y = np.array(Y)
+    Sx = np.sum(X)
+    Sy = np.sum(Y)
+    Sxx = np.sum(np.power(X,2))
+    Sxy = np.sum(X*Y)
+    Syy = np.sum(np.power(Y,2))    
+    n = len(X)*1.
+    slope = (n*Sxy - Sx*Sy)/(n*Sxx-Sx**2)
+    alpha = Sy/n - slope*Sx/n
+    return  slope*X + alpha - Y 
+
 def subtract_median_bias_residue_channel(ChannelCube,time=None,percentile=50):
     """ Returns the median residue corrected channel strip cube.
     Input:
@@ -82,8 +96,8 @@ def subtract_median_bias_residue_channel(ChannelCube,time=None,percentile=50):
     ResidueCorrection = BotBiasResidue[:,np.newaxis] + ResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
     return ChannelCube + ResidueCorrection[:,:,np.newaxis]
 
-def subtract_median_bias_residue(DataCube,no_channels=32,time=None, percentile=50):
-    """ Returns the median residue bias corrected data cube.
+def subtract_median_bias_residue(DataCube,no_channels=32,time=None, percentile=25):
+    """ Returns the median/percentile residue bias corrected data cube.
     Input: 
         DataCube: The 3D pedestal subtracted, and reference pixel subracted Data Cube. 
         no_channels: Number of channels used in readout. (default:32)
@@ -92,10 +106,60 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None, percentile=5
 
     Output:
         BiasCorrectionCorrectedCube : 3D cube after correcting the bias corrections across channel
+
+           Steps:
+             1) Take percentile of the top and bottom sections of the channel for each readout odd and even seperatly.
+             2) Fit the median values with a straight line with zero intercept using LSQ.
+                [Intercept and slope is taken to be common for all image: Hence it is crucial to remove pedestal signal before running this function]
+                [LSQ fit formula assumes the residues are Gaussian distributed. Hence it is crucial to subtract 0th order 
+                 bias values using the refernce pixels at the top and bottom edges of the order before running this correction.]
+             3) Interpolate these two median bias level corrections to all the pixels and subtract from the Channel cube (odd and even seperatly).
+
     """
-    CorrectedCubes = []
+
+    TopOddEvenBiases = []
+    BottomOddEvenBiases = []
+
+    hsize = int(DataCube.shape[1]/2)
+    if time is None:
+        time = np.arange(DataCube.shape[0])
+
     for ChannelCube in np.split(DataCube,np.arange(1,no_channels)*int(2048/no_channels),axis=2):
-        CorrectedCubes.append( subtract_median_bias_residue_channel(ChannelCube,time=time,percentile=percentile) )
+        # Calculate top bias values (Odd and even seperately concatenated)
+        TopOddEvenBiases.append([np.percentile(tile,percentile) for tile in ChannelCube[:,0:hsize,1::2]]+
+                                [np.percentile(tile,percentile) for tile in ChannelCube[:,0:hsize,0::2]])
+        # Calculate bottom bias values
+        BottomOddEvenBiases.append([np.percentile(tile,percentile) for tile in ChannelCube[:,hsize:,1::2]]+
+                                   [np.percentile(tile,percentile) for tile in ChannelCube[:,hsize:,0::2]])
+
+    # Fit a straight line and calcuate the residue shifts due to bias fluctuations
+    TopResidue = fit_slope_andget_residue(np.tile(time,2*len(TopOddEvenBiases)), np.concatenate(TopOddEvenBiases))
+    BottomResidue = fit_slope_andget_residue(np.tile(time,2*len(BottomOddEvenBiases)), np.concatenate(BottomOddEvenBiases))
+
+    TopOddResidues = np.split(TopResidue,2*len(TopOddEvenBiases))[0::2]
+    TopEvenResidues = np.split(TopResidue,2*len(TopOddEvenBiases))[1::2]
+    BottomOddResidues = np.split(BottomResidue,2*len(BottomOddEvenBiases))[0::2]
+    BottomEvenResidues = np.split(BottomResidue,2*len(BottomOddEvenBiases))[1::2]
+
+    # Apply the residue shift correction to odd and even columns of each channel
+    CorrectedCubes = []
+    for ChannelCube,TOddR,TEvenR,BOddR,BEvenR in zip(np.split(DataCube,np.arange(1,no_channels)*int(2048/no_channels),axis=2),
+                                                     TopOddResidues,TopEvenResidues,
+                                                     BottomOddResidues,BottomEvenResidues):
+        CorrChannelCube = ChannelCube.copy()
+        x = np.arange(ChannelCube.shape[1])
+
+        OddResidueCorrectionSlopes = (TOddR - BOddR)/(hsize/2 - (hsize + hsize/2))
+        OddResidueCorrection = BOddR[:,np.newaxis] + OddResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
+        CorrChannelCube[:,:,1::2] = ChannelCube[:,:,1::2] + OddResidueCorrection[:,:,np.newaxis]
+
+        EvenResidueCorrectionSlopes = (TEvenR - BEvenR)/(hsize/2 - (hsize + hsize/2))
+        EvenResidueCorrection = BEvenR[:,np.newaxis] + EvenResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
+        CorrChannelCube[:,:,0::2] = ChannelCube[:,:,0::2] + EvenResidueCorrection[:,:,np.newaxis]
+
+
+        
+        CorrectedCubes.append(CorrChannelCube)
     return np.dstack(CorrectedCubes)
         
 
