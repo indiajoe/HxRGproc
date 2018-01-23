@@ -51,10 +51,8 @@ def fit_slope_zeroIntercept_residue(X,Y):
     slope = np.sum(Y*X)/np.sum(np.power(X,2))
     return  slope*X - Y 
 
-def fit_slope_andget_residue(X,Y):
-    """ Returns the residue of a LSQ fitted straight line Y = mX +c """
-    X = np.array(X)
-    Y = np.array(Y)
+def fit_slope_1d(X,Y):
+    """ Returns the slope and intercept of the the line Y = slope*X +alpha """
     Sx = np.sum(X)
     Sy = np.sum(Y)
     Sxx = np.sum(np.power(X,2))
@@ -63,7 +61,33 @@ def fit_slope_andget_residue(X,Y):
     n = len(X)*1.
     slope = (n*Sxy - Sx*Sy)/(n*Sxx-Sx**2)
     alpha = Sy/n - slope*Sx/n
+    return slope, alpha
+
+def fit_slope_andget_residue(X,Y):
+    """ Returns the residue of a LSQ fitted straight line Y = mX +c """
+    X = np.array(X)
+    Y = np.array(Y)
+    slope, alpha =  fit_slope_1d(X,Y)
     return  slope*X + alpha - Y 
+
+def robust_medianfromPercentiles(array,percentiles=()):
+    """ Estimates the median from percentiles of data in array.
+    Warning: Assumes Normal distribution of data in the used percentile ranges
+    Useful for estimating median in array when a fraciton of pixels are illuminated 
+    Default percentiles used are lower [10,20,30,40,45] percentiles"""
+
+    if percentiles:
+        percentiles = np.array(percentiles)
+        SigmaVector = scipy.stats.norm.ppf(percentiles/100.)
+    else:
+        percentiles = np.array([10.,20.,30.,40.,45.])
+        SigmaVector = np.array([-1.28155157, -0.84162123, -0.52440051, -0.2533471 , -0.12566135])
+
+    PercentileValues = np.percentile(array,percentiles)
+    
+    sig, med =  fit_slope_1d(SigmaVector,PercentileValues)
+
+    return med
 
 def subtract_median_bias_residue_channel(ChannelCube,time=None,percentile=50):
     """ Returns the median residue corrected channel strip cube.
@@ -96,19 +120,18 @@ def subtract_median_bias_residue_channel(ChannelCube,time=None,percentile=50):
     ResidueCorrection = BotBiasResidue[:,np.newaxis] + ResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
     return ChannelCube + ResidueCorrection[:,:,np.newaxis]
 
-def subtract_median_bias_residue(DataCube,no_channels=32,time=None, percentile=25):
-    """ Returns the median/percentile residue bias corrected data cube.
+def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
+    """ Returns the median residue bias corrected data cube.
     Input: 
         DataCube: The 3D pedestal subtracted, and reference pixel subracted Data Cube. 
         no_channels: Number of channels used in readout. (default:32)
         time: (optional) epochs of the NDR readouts in the data cube. (default: uniform cadence)
-        percentile: 50 is median. Give number between 0 and 100 to choose the percentile of counts to use for slope calculation.
 
     Output:
         BiasCorrectionCorrectedCube : 3D cube after correcting the bias corrections across channel
 
            Steps:
-             1) Take percentile of the top and bottom sections of the channel for each readout odd and even seperatly.
+             1) Take median of the top and bottom sections of the channel for each readout odd and even seperatly.
              2) Fit the median values with a straight line with zero intercept using LSQ.
                 [Intercept and slope is taken to be common for all image: Hence it is crucial to remove pedestal signal before running this function]
                 [LSQ fit formula assumes the residues are Gaussian distributed. Hence it is crucial to subtract 0th order 
@@ -126,11 +149,11 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None, percentile=2
 
     for ChannelCube in np.split(DataCube,np.arange(1,no_channels)*int(2048/no_channels),axis=2):
         # Calculate top bias values (Odd and even seperately concatenated)
-        TopOddEvenBiases.append([np.percentile(tile,percentile) for tile in ChannelCube[:,0:hsize,1::2]]+
-                                [np.percentile(tile,percentile) for tile in ChannelCube[:,0:hsize,0::2]])
+        TopOddEvenBiases.append([robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,1::2]]+
+                                [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,0::2]])
         # Calculate bottom bias values
-        BottomOddEvenBiases.append([np.percentile(tile,percentile) for tile in ChannelCube[:,hsize:,1::2]]+
-                                   [np.percentile(tile,percentile) for tile in ChannelCube[:,hsize:,0::2]])
+        BottomOddEvenBiases.append([robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,1::2]]+
+                                   [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,0::2]])
 
     # Fit a straight line and calcuate the residue shifts due to bias fluctuations
     TopResidue = fit_slope_andget_residue(np.tile(time,2*len(TopOddEvenBiases)), np.concatenate(TopOddEvenBiases))
@@ -192,8 +215,8 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     if do_LSQmedian_correction:
         # Step 4: After the previous step the errors in the bias corrections are Gaussian, since it comes 
         # from the error in estimate of bias from small number of reference pixels.
-        # So, in the next step we shall fit straight line to the full 25 percentile image sections of each strip and estimate residual bias corrections.
-        DataCube = subtract_median_bias_residue(DataCube,no_channels=no_channels,time=time, percentile=25)
+        # So, in the next step we shall fit straight line to the full median image sections of each strip and estimate residual bias corrections.
+        DataCube = subtract_median_bias_residue(DataCube,no_channels=no_channels,time=time)
 
     return DataCube
 
