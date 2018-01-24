@@ -150,11 +150,11 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
         # Since the median flux levels in each channel will be different.
 
         # Calculate top bias values (Odd and even seperately concatenated)
-        TopOddEvenBiases = [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,1::2]]+
-        [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,0::2]]
+        TopOddEvenBiases = [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,1::2]] +\
+                           [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,0::2]]
         # Calculate bottom bias values
-        BottomOddEvenBiases = [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,1::2]]+
-        [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,0::2]]
+        BottomOddEvenBiases = [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,1::2]] +\
+                              [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,0::2]]
 
         # Fit a straight line and calcuate the residue shifts due to bias fluctuations
         TopResidue = fit_slope_andget_residue(np.tile(time,2), TopOddEvenBiases)
