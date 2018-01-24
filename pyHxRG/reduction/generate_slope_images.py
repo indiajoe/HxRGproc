@@ -178,12 +178,14 @@ def calculate_slope_image(UTRlist,Config):
             slopeimg[i,j], var = reduction.piecewise_avgSlopeVar(DataCube[:,i,j],time,redn,gain)
             if Config['CalculateVarienceImage']:
                 VarImg[i,j] = var
+        header['history'] = 'Cosmic Ray hits fixed before slope calculation'
     else:
         logging.info('UnFixed {0} CR hits..'.format(TotalCRhits))
 
     header['NoNDR'] = (NoNDR, 'No of NDRs used in slope')
     header['EXPLNDR'] = (time[-1], 'Int Time of Last NDR used in slope')
     header['PEDSUB'] = (Config['DoPedestalSubtraction'], 'T/F Did Pedestal Subtraction')
+    header['MLSQBIA'] = (Config['DoLSQmedianCorrection'], 'UpperThreshold to do LSQ median bias algo')
     header['NLCORR'] = (Config['NonLinearCorrCoeff'], 'NonLinearCorr Coeff File')
     header['UTHRESH'] = (Config['UpperThreshold'], 'UpperThreshold Mask value/file')
     header['CUNITS'] = ('e-/sec','Units of the counts in image')
@@ -192,7 +194,6 @@ def calculate_slope_image(UTRlist,Config):
     header['NOOFCRH'] = (TotalCRhits,'No of Cosmic Rays Hits detected')
     header['NRESETA'] = (len(ResetAnomalyPixels),'No of Reset Anomaly pixels detected')
     header['history'] = 'Slope image generated'
-    header['history'] = 'Cosmic Ray hits fixed in slope'
     hdu = fits.PrimaryHDU(slopeimg.astype('float32'),header=header)
     hdulist = fits.HDUList([hdu])
 
