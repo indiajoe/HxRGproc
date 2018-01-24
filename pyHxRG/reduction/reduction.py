@@ -140,49 +140,45 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
 
     """
 
-    TopOddEvenBiases = []
-    BottomOddEvenBiases = []
-
     hsize = int(DataCube.shape[1]/2)
     if time is None:
         time = np.arange(DataCube.shape[0])
 
-    for ChannelCube in np.split(DataCube,np.arange(1,no_channels)*int(2048/no_channels),axis=2):
-        # Calculate top bias values (Odd and even seperately concatenated)
-        TopOddEvenBiases.append([robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,1::2]]+
-                                [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,0::2]])
-        # Calculate bottom bias values
-        BottomOddEvenBiases.append([robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,1::2]]+
-                                   [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,0::2]])
-
-    # Fit a straight line and calcuate the residue shifts due to bias fluctuations
-    TopResidue = fit_slope_andget_residue(np.tile(time,2*len(TopOddEvenBiases)), np.concatenate(TopOddEvenBiases))
-    BottomResidue = fit_slope_andget_residue(np.tile(time,2*len(BottomOddEvenBiases)), np.concatenate(BottomOddEvenBiases))
-
-    TopOddResidues = np.split(TopResidue,2*len(TopOddEvenBiases))[0::2]
-    TopEvenResidues = np.split(TopResidue,2*len(TopOddEvenBiases))[1::2]
-    BottomOddResidues = np.split(BottomResidue,2*len(BottomOddEvenBiases))[0::2]
-    BottomEvenResidues = np.split(BottomResidue,2*len(BottomOddEvenBiases))[1::2]
-
-    # Apply the residue shift correction to odd and even columns of each channel
     CorrectedCubes = []
-    for ChannelCube,TOddR,TEvenR,BOddR,BEvenR in zip(np.split(DataCube,np.arange(1,no_channels)*int(2048/no_channels),axis=2),
-                                                     TopOddResidues,TopEvenResidues,
-                                                     BottomOddResidues,BottomEvenResidues):
+    for ChannelCube in np.split(DataCube,np.arange(1,no_channels)*int(2048/no_channels),axis=2):
+        # We have to do the corection independently for each channel. 
+        # Since the median flux levels in each channel will be different.
+
+        # Calculate top bias values (Odd and even seperately concatenated)
+        TopOddEvenBiases = [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,1::2]]+
+        [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,0::2]]
+        # Calculate bottom bias values
+        BottomOddEvenBiases = [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,1::2]]+
+        [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,0::2]]
+
+        # Fit a straight line and calcuate the residue shifts due to bias fluctuations
+        TopResidue = fit_slope_andget_residue(np.tile(time,2), TopOddEvenBiases)
+        BottomResidue = fit_slope_andget_residue(np.tile(time,2), BottomOddEvenBiases)
+
+        TopOddResidues, TopEvenResidues = np.split(TopResidue,2)
+        BottomOddResidues, BottomEvenResidues = np.split(BottomResidue,2)
+
+        # Apply the residue shift correction to odd and even columns of each channel
+
         CorrChannelCube = ChannelCube.copy()
         x = np.arange(ChannelCube.shape[1])
 
-        OddResidueCorrectionSlopes = (TOddR - BOddR)/(hsize/2 - (hsize + hsize/2))
-        OddResidueCorrection = BOddR[:,np.newaxis] + OddResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
+        OddResidueCorrectionSlopes = (TopOddResidues - BottomOddResidues)/(hsize/2 - (hsize + hsize/2))
+        OddResidueCorrection = BottomOddResidues[:,np.newaxis] + OddResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
         CorrChannelCube[:,:,1::2] = ChannelCube[:,:,1::2] + OddResidueCorrection[:,:,np.newaxis]
 
-        EvenResidueCorrectionSlopes = (TEvenR - BEvenR)/(hsize/2 - (hsize + hsize/2))
-        EvenResidueCorrection = BEvenR[:,np.newaxis] + EvenResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
+
+        EvenResidueCorrectionSlopes = (TopEvenResidues - BottomEvenResidues)/(hsize/2 - (hsize + hsize/2))
+        EvenResidueCorrection = BottomEvenResidues[:,np.newaxis] + EvenResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
         CorrChannelCube[:,:,0::2] = ChannelCube[:,:,0::2] + EvenResidueCorrection[:,:,np.newaxis]
-
-
         
         CorrectedCubes.append(CorrChannelCube)
+
     return np.dstack(CorrectedCubes)
         
 
