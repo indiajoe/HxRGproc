@@ -288,8 +288,16 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFileFormat='Sl
 
     if LastNDR is None:
         LastNDR = len(UTRlist)
-    logging.info('Loading Ramp data of {0}'.format(RampNo))
-    Slopehdulist,header = calculate_slope_image(UTRlist[FirstNDR:LastNDR],Config)
+
+    logging.info('Processing Ramp data of {0}'.format(RampNo))
+ 
+    if len(UTRlist[FirstNDR:LastNDR]) > 1: # You need atlest two frames to fit slope
+        Slopehdulist,header = calculate_slope_image(UTRlist[FirstNDR:LastNDR],Config)
+    else:
+        logging.warning('Insuffient number of NDRs (={0}) to generate slope image'.format(len(UTRlist[FirstNDR:LastNDR])))
+        logging.warning('Skipping image {0}: {1}'.format(RampNo,UTRlist[FirstNDR:LastNDR]))
+        return None
+
     if ExtraHeaderDictFunc is not None:
         for key,value in ExtraHeaderDictFunc(header).items():
             Slopehdulist[0].header[key] = value
