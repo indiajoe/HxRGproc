@@ -21,7 +21,7 @@ setup(name='pyHxRG',
       packages=['pyHxRG','pyHxRG.reduction','pyHxRG.simulator'],
       entry_points = {
           'console_scripts': ['generate_slope_images=pyHxRG.reduction.generate_slope_images:main',
-                          'generate_cds_imagesT=pyHxRG.reduction.generate_cds_images:main_Teledyne'],
+                          'generate_cds_images=pyHxRG.reduction.generate_cds_images:main'],
       },
       install_requires=[
           'numpy',

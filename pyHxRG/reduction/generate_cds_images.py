@@ -15,7 +15,8 @@ import logging
 import signal
 import traceback
 import ConfigParser
-from .generate_slope_images import estimate_NoNDR_Drop_G_TeledyneData, TeledyneFileNameSortKeyFunc, pack_traceback_to_errormsg, log_all_uncaughtexceptions_handler, LogMemoryErrors
+from . import reduction 
+from .generate_slope_images import estimate_NoNDR_Drop_G_TeledyneData, FileNameSortKeyFunc_Teledyne, FileNameSortKeyFunc_HPFLinux, pack_traceback_to_errormsg, log_all_uncaughtexceptions_handler, LogMemoryErrors
 
 def calculate_cds_image(FirstImage,LastImage):
     """ Returns the LastImage-FirstImage data hdulist and header """
@@ -68,13 +69,15 @@ def generate_cds_image(RampNo,InputDir,OutputDir,OutputFilePrefix='CDS-R',
     return OutputFileName
 
 
-def parse_args_Teledyne():
-    """ Parses the command line input arguments for Teledyne Software data reduction"""
-    parser = argparse.ArgumentParser(description="Script to Generate CDS images from Up-the-Ramp data taken using Teledyne's Windows software")
+def parse_args():
+    """ Parses the command line input arguments for CDS data reduction of up-the-ramp"""
+    parser = argparse.ArgumentParser(description="Script to Generate CDS images from Up-the-Ramp")
     parser.add_argument('InputDir', type=str,
                         help="Input Directory contiaining the Up-the-Ramp Raw data files")
     parser.add_argument('OutputMasterDir', type=str,
                         help="Output Master Directory to which output CDS images to be written")
+    parser.add_argument('Instrument', choices=ReadOutSoftware.keys(),
+                        help="Name of the supported instrument data")
     parser.add_argument('--NoNDR_Drop_G', type=str, default=None,
                         help="No of NDRS per Group:No of Drops:No of Groups (Example  40:60:5)")
     parser.add_argument('--FirstNDR', type=int, default=0,
@@ -92,12 +95,17 @@ def parse_args_Teledyne():
     return args
 
 
-def main_Teledyne():
-    """ Standalone Script to generate CDS images from Up the Ramp data taken using Teledyne's Windows software"""
+def main():
+    """ Standalone Script to generate CDS images from Up the Ramp data"""
     # Override the default exception hook with our custom handler
     sys.excepthook = log_all_uncaughtexceptions_handler
 
-    args = parse_args_Teledyne()    
+    args = parse_args()    
+
+    INST = arg.Instrument
+    if INST not in ReadOutSoftware:
+        logging.error('Intrument {0} not supported'.format(INST))
+        sys.exit(1)
 
     if args.logfile is None:
         logging.basicConfig(format='%(asctime)s: %(levelname)s: %(message)s',
@@ -111,39 +119,47 @@ def main_Teledyne():
     logging.info('Processing data in {0}'.format(args.InputDir))
 
     OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(args.InputDir.rstrip('/')))
-    RampFilenamePrefix = 'H2RG_R{0:02}_M'
+    RampFilenamePrefix = ReadOutSoftware[INST]['RampFilenameString']
 
+    InputDir = os.path.join(args.InputDir,ReadOutSoftware[INST]['InputSubDir']) # Append any redundant input subdirectory to be added
 
     # Find the number of Ramps in the input Directory
-    imagelist = sorted((os.path.join(args.InputDir,f) for f in os.listdir(args.InputDir) if (os.path.splitext(f)[-1] == '.fits')))
-    RampList = sorted(set((int(re.search('H2RG_R(.+?)_M',os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+    imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
+    RampList = sorted(set((int(re.search(ReadOutSoftware[INST]['RampidRegexp'],os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+
+    noNDR = None
     if args.NoNDR_Drop_G is None:
-        noNDR,noDrop,noG = estimate_NoNDR_Drop_G_TeledyneData(imagelist)
+        if ReadOutSoftware[INST]['estimate_NoNDR_Drop_G_func'] is not None:
+            noNDR,noDrop,noG = ReadOutSoftware[INST]['estimate_NoNDR_Drop_G_func'](imagelist)
     else:
         noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
+
     # Do sanity check that all the expected NDRS are available
-    ExpectedFramesPerRamp = noNDR*noG
-    RampTime = fits.getval(imagelist[0],'FRMTIME')*(noNDR+noDrop)*noG
+    ExpectedFramesPerRamp = noNDR*noG if (noNDR is not None) else None
+        
 
     CDSImageGenerator = partial(generate_cds_image,
-                                InputDir = args.InputDir,
+                                InputDir = InputDir,
                                 OutputDir = OutputDir,
                                 OutputFilePrefix = 'CDS-R',
                                 FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
                                 RampFilenamePrefix = RampFilenamePrefix,
-                                FilenameSortKeyFunc = TeledyneFileNameSortKeyFunc)
+                                FilenameSortKeyFunc = ReadOutSoftware[INST]['filename_sort_func'])
 
     
     logging.info('Output CDS images will be written to {0}'.format(OutputDir))
-    SelectedRampList = []
-    for Ramp in RampList:
-        NoofImages = len([f for f in  imagelist  if RampFilenamePrefix.format(Ramp) in os.path.basename(f)])
-        if  NoofImages == ExpectedFramesPerRamp:
-            SelectedRampList.append(Ramp)
-        else:
-            logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
-            logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
-            
+    if ExpectedFramesPerRamp is not None:
+        SelectedRampList = []
+        for Ramp in RampList:
+            NoofImages = len([f for f in  imagelist  if RampFilenameString.format(Ramp) in os.path.basename(f)])
+            if  NoofImages == ExpectedFramesPerRamp:
+                SelectedRampList.append(Ramp)
+            else:
+                logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
+                logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
+    else:
+        SelectedRampList = RampList
+
     logging.info('Calculating CDS for {0} Ramps in {1}'.format(len(SelectedRampList),args.InputDir))
 
     # # To Run all in a single process serially. Very useful for debugging
@@ -170,5 +186,23 @@ def main_Teledyne():
 
 ###############################################
 
+# Instrument specific configuration
+# Register functions which are specific to each readout software output in dictionary below
+ReadOutSoftware = {
+    'TeledyneWindows':{'RampFilenameString' : 'H2RG_R{0}_M', #Input filename structure with Ramp id substitution
+                       'RampidRegexp' : 'H2RG_R(.+?)_M', # Regexp to extract unique Ramp id from filename
+                       'InputSubDir' : '', # Append any redundant input subdirectory to be added
+
+                       'filename_sort_func' : FileNameSortKeyFunc_Teledyne,
+                       'estimate_NoNDR_Drop_G_func' : estimate_NoNDR_Drop_G_TeledyneData},
+
+    'HPFLinux':{'RampFilenameString' : 'hpf_{0}_F', #Input filename structure with Ramp id substitution
+                'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
+                'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
+                'filename_sort_func': FileNameSortKeyFunc_HPFLinux,
+                'estimate_NoNDR_Drop_G_func':None},
+    }
+
+
 if __name__ == "__main__":
-    main_Teledyne()
+    main()
