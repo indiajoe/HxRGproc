@@ -102,7 +102,7 @@ def main():
 
     args = parse_args()    
 
-    INST = arg.Instrument
+    INST = args.Instrument
     if INST not in ReadOutSoftware:
         logging.error('Intrument {0} not supported'.format(INST))
         sys.exit(1)
@@ -125,7 +125,7 @@ def main():
 
     # Find the number of Ramps in the input Directory
     imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
-    RampList = sorted(set((int(re.search(ReadOutSoftware[INST]['RampidRegexp'],os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+    RampList = sorted(set((re.search(ReadOutSoftware[INST]['RampidRegexp'],os.path.basename(f)).group(1) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
 
     noNDR = None
     if args.NoNDR_Drop_G is None:
