@@ -44,7 +44,7 @@ def save_img(fitsfile,out_imgfilename,ext=0):
     # Load img data
     Img = fits.getdata(fitsfile,ext=ext)
     # Use Histogram Equialise streaching to plot
-    norm = ImageNormalize(Img,stretch=HistEqStretch(Img))
+    norm = ImageNormalize(np.nan_to_num(Img),stretch=HistEqStretch(np.nan_to_num(Img)))
     
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
@@ -60,9 +60,9 @@ def save_column_median_plot(fitsfile,ColumnMedianPlotName,ext=0):
 
     fig = plt.figure()
     ax = fig.add_subplot(1, 1, 1)
-    ax.plot(np.median(Img[:4,:],axis=0),color='b',label='top ref')
-    ax.plot(np.median(Img[-4:,:],axis=0),color='g',label='bot ref')
-    ax.plot(np.median(Img,axis=0),color='k',label='median ref')
+    ax.plot(np.nanmedian(Img[:4,:],axis=0),color='b',label='top ref')
+    ax.plot(np.nanmedian(Img[-4:,:],axis=0),color='g',label='bot ref')
+    ax.plot(np.nanmedian(Img,axis=0),color='k',label='median ref')
     ax.set_xlabel('Column pixels')
     ax.set_ylabel('median e-/sec')
     ax.grid()
@@ -98,8 +98,8 @@ def list_diagnostic_quantities(fitsfile):
     OutList.append('No: of Reset Anomaly = {0}'.format(hdulist[0].header['NRESETA']))
     OutList.append('No: of CR Hits = {0}'.format(hdulist[0].header['NOOFCRH']))
     OutList.append('No: of NaNs = {0}'.format(np.sum(np.isnan(hdulist[0].data))))
-    OutList.append('95 percentile e/sec = {0}'.format(np.percentile(hdulist[0].data,95)))
-    OutList.append('Median varience = {0}'.format(np.median(hdulist[1].data)))
+    OutList.append('95 percentile e/sec = {0}'.format(np.nanpercentile(hdulist[0].data,95)))
+    OutList.append('Median varience = {0}'.format(np.nanmedian(hdulist[1].data)))
     OutList.append('Max-Min UTR derivative = {0}'.format(hdulist[3].header['MINMAXD']))
     OutList.append('STDev of UTR derivative = {0}'.format(hdulist[3].header['STD_D']))    
 
