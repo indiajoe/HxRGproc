@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from astropy.visualization import HistEqStretch, ImageNormalize
 import datetime
 import logging
+import errno
 
 HTMLReportTemplate = """
 <!DOCTYPE html>
@@ -137,8 +138,10 @@ def create_summary_report(DataDir,OutReportDir):
     try:
         os.makedirs(OutFigureDir)
     except OSError as e:
-        logging.info(e)
-        logging.info('Ignore above msg if the Output dir exists. ')
+        if e.errno != errno.EEXIST:
+            logging.info(e)
+            raise
+        pass # Ignore the error that Output dir already exist.
         
     TableHeader = create_an_html_table_row(['Filename','Image','Column plot','UTR plot','Quantities'],tag='th')
     TableRowsList = []

@@ -8,6 +8,7 @@ import numpy as np
 import numpy.ma
 import os
 import re
+import errno
 from multiprocessing import TimeoutError
 from multiprocessing.pool import Pool
 from functools32 import wraps, partial
@@ -49,8 +50,10 @@ def generate_cds_image(RampNo,InputDir,OutputDir,OutputFilePrefix='CDS-R',
     try:
         os.makedirs(OutputDir)
     except OSError as e:
-        logging.info(e)
-        logging.info('Ignore above msg that Output dir exists. ')
+        if e.errno != errno.EEXIST:
+            logging.info(e)
+            raise
+        pass # Ignore the error that Output dir already exist.
 
     if os.path.isfile(OutputFileName):
         logging.warning('WARNING: Output file {0} already exist...'.format(OutputFileName))

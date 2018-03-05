@@ -8,6 +8,7 @@ import numpy as np
 import numpy.ma
 import os
 import re
+import errno
 from datetime import datetime
 from astropy.time import Time, TimezoneInfo
 import astropy.units as u
@@ -274,8 +275,10 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFileFormat='Sl
     try:
         os.makedirs(OutputDir)
     except OSError as e:
-        logging.info(e)
-        logging.info('Ignore above msg that Output dir exists. ')
+        if e.errno != errno.EEXIST:
+            logging.info(e)
+            raise
+        pass # Ignore the error that Output dir already exist.
 
     if os.path.isfile(OutputFileName):
         logging.warning('WARNING: Output file {0} already exist...'.format(OutputFileName))
