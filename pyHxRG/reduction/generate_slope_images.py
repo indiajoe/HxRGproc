@@ -230,9 +230,9 @@ def calculate_slope_image(UTRlist,Config):
         # Save the Average Ramp curves of each region also as a fits extension
         hduAvgRamps = fits.ImageHDU(np.array(AverageRamps).astype('float32'))
         hduAvgRamps.header['DELTAT'] = (np.median(np.diff(time)), 'Time delta between readout in sec')
-        SlopeDerivative = np.diff(np.average(AverageRamps,axis=0))
-        hduAvgRamps.header['MINMAXD'] = (max(SlopeDerivative) - min(SlopeDerivative), 'Max - Min of the derivative of average slope')
-        hduAvgRamps.header['STD_D'] = (np.std(SlopeDerivative), 'Std dev of the derivative of average slope')
+        SlopeDerivative = np.diff(np.nanmean(AverageRamps,axis=0))
+        hduAvgRamps.header['MINMAXD'] = (np.nanmax(SlopeDerivative) - np.nanmin(SlopeDerivative), 'Max - Min of the derivative of average slope')
+        hduAvgRamps.header['STD_D'] = (np.nanstd(SlopeDerivative), 'Std dev of the derivative of average slope')
         hduAvgRamps.header['COMMENT'] = 'Average up-the-ramp curves of each region'
         # Create multi extension fits file
         hdulist.append(hduAvgRamps)
