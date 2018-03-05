@@ -376,8 +376,13 @@ def FixDataCube_func_HPFLinux(DataCube):
     IJZeroMask = np.any(ZeroMask,axis=0)
     t = np.arange(DataCube.shape[0])
     for i,j in zip(*np.where(IJZeroMask)):
-        f = interp1d(t[~ZeroMask[:,i,j]],DataCube[:,i,j][~ZeroMask[:,i,j]],kind='linear',fill_value='extrapolate')
-        DataCube[:,i,j][ZeroMask[:,i,j]] = f(t[ZeroMask[:,i,j]])
+        try:
+            f = interp1d(t[~ZeroMask[:,i,j]],DataCube[:,i,j][~ZeroMask[:,i,j]],kind='linear',fill_value='extrapolate')
+        except ValueError as e:
+            logging.error(e)
+            logging.error('Unable to fix the Zero in {0},{1} pix due to lack of enough non-zero data {2}'.format(i,j,len(t[~ZeroMask[:,i,j]])))
+        else:
+            DataCube[:,i,j][ZeroMask[:,i,j]] = f(t[ZeroMask[:,i,j]])
 
     return DataCube
 #####
