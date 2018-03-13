@@ -231,8 +231,15 @@ def calculate_slope_image(UTRlist,Config):
         hduAvgRamps = fits.ImageHDU(np.array(AverageRamps).astype('float32'))
         hduAvgRamps.header['DELTAT'] = (np.median(np.diff(time)), 'Time delta between readout in sec')
         SlopeDerivative = np.diff(np.nanmean(AverageRamps,axis=0))
-        hduAvgRamps.header['MINMAXD'] = (np.nanmax(SlopeDerivative) - np.nanmin(SlopeDerivative), 'Max - Min of the derivative of average slope')
-        hduAvgRamps.header['STD_D'] = (np.nanstd(SlopeDerivative), 'Std dev of the derivative of average slope')
+        try:
+            hduAvgRamps.header['MINMAXD'] = (np.nanmax(SlopeDerivative) - np.nanmin(SlopeDerivative), 'Max - Min of the derivative of average slope')
+            hduAvgRamps.header['STD_D'] = (np.nanstd(SlopeDerivative), 'Std dev of the derivative of average slope')
+        except ValueError as e:
+            logging.error(e)
+            logging.error('Unable to calculate minmax or dtd due to {0} nans'.format(len(SlopeDerivative)))
+            hduAvgRamps.header['MINMAXD'] = (0, 'Max - Min of the derivative of average slope')
+            hduAvgRamps.header['STD_D'] = (0, 'Std dev of the derivative of average slope')
+
         hduAvgRamps.header['COMMENT'] = 'Average up-the-ramp curves of each region'
         # Create multi extension fits file
         hdulist.append(hduAvgRamps)
