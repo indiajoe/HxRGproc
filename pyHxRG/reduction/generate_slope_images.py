@@ -68,11 +68,12 @@ def LoadDataCube(filelist):
     return np.array(datalist), fits.getheader(filelist[0])
 
 
-def calculate_slope_image(UTRlist,Config):
+def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     """ Returns slope image hdulist object, and header from the input up-the-ramp fits file list 
     Input:
           UTRlist: List of up-the-ramp NDR files
           Config: Configuration dictionary imported from the Config file
+          NoOfFSkip: Number of frames skipped after Reset
     Returns:
          Slopeimage hdulist object, header
 """
@@ -110,7 +111,7 @@ def calculate_slope_image(UTRlist,Config):
             # File name with BSPL* is a BSpline correction
             DataCube = reduction.apply_nonlinearcorr_bspline(DataCube,
                                                              Config['NonLinearCorrCoeff'],
-                                                             UpperThresh=None, NoOfPreFrames=1)
+                                                             UpperThresh=None, NoOfPreFrames=NoOfFSkip+1)
 
     # Mask values above upper threshold before fitting slope
     if Config['UpperThreshold']:
@@ -301,10 +302,13 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFileFormat='Sl
 
     logging.info('Processing Ramp data of {0}'.format(RampNo))
  
-    if len(UTRlist[FirstNDR:LastNDR]) > 1: # You need atlest two frames to fit slope
-        Slopehdulist,header = calculate_slope_image(UTRlist[FirstNDR:LastNDR],Config)
+    sanitycheckUTR = (LastNDR <= len(UTRlist)) and (FirstNDR < len(UTRlist)) # Sanity check of the user input of range of NDRs
+
+    if (len(UTRlist[FirstNDR:LastNDR]) > 1) and sanitycheckUTR: # You need atlest two frames to fit slope
+        Slopehdulist,header = calculate_slope_image(UTRlist[FirstNDR:LastNDR], Config, NoOfFSkip=FirstNDR)
     else:
         logging.warning('Insuffient number of NDRs (={0}) to generate slope image'.format(len(UTRlist[FirstNDR:LastNDR])))
+        logging.warning('Sanity Check of First:LastNDR = {0}:{1} -{2}'.format(FirstNDR,LastNDR,sanitycheckUTR))
         logging.warning('Skipping image {0}: {1}'.format(RampNo,UTRlist[FirstNDR:LastNDR]))
         return None
 
