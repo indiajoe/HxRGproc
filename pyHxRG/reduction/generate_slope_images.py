@@ -217,10 +217,12 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     # If user has asked to make exposure up-the-ramp curve for dignositices
     if Config['AverageUpTheRampDiagnostic']:
         if isinstance(Config['AverageUpTheRampDiagnostic'],str):
-            MultiRegionArray = np.load(Config['AverageUpTheRampDiagnostic'])  
+            RegionFilename = Config['AverageUpTheRampDiagnostic']
+            MultiRegionArray = np.load(RegionFilename)  
         else:
             # Use all array as same region
             MultiRegionArray = np.ones((DataCube.shape[1],DataCube.shape[2]))
+            RegionFilename = 'ALL'
         AverageRamps = []
         for region in np.unique(MultiRegionArray):
             if region == 0 : 
@@ -230,6 +232,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
 
         # Save the Average Ramp curves of each region also as a fits extension
         hduAvgRamps = fits.ImageHDU(np.array(AverageRamps).astype('float32'))
+        hduAvgRamps.header['REGFILE'] = (RegionFilename,'Filename of RegionMask/ALL')
         hduAvgRamps.header['DELTAT'] = (np.median(np.diff(time)), 'Time delta between readout in sec')
         SlopeDerivative = np.diff(np.nanmean(AverageRamps,axis=0))
         try:
