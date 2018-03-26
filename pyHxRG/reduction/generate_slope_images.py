@@ -228,7 +228,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
             if region == 0 : 
                 continue # Zero is for regions to ignore
             RegionMask = MultiRegionArray == region
-            AverageRamps.append(np.ma.average(DataCube[:,RegionMask],axis=1))
+            AverageRamps.append(np.nanmean(DataCube[:,RegionMask].filled(np.nan),axis=1))
 
         # Save the Average Ramp curves of each region also as a fits extension
         hduAvgRamps = fits.ImageHDU(np.array(AverageRamps).astype('float32'))
