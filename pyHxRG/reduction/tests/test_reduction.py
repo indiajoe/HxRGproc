@@ -11,13 +11,12 @@ from pyHxRG.reduction import generate_slope_images as gsi
 TestDataDir = os.path.join(os.path.dirname(__file__), 'testdata')
 
 class BiasCorrectionTests(unittest.TestCase):
-    # RawDataCube = None
-    # RawHeader = None
-    
+
     def setUp(self):
-        self.DataCube = np.load(os.path.join(TestDataDir,'BiasRemovedDataCubeTestResult.npy'))
-        self.NoNDR = self.DataCube.shape[0]
+        self.RawDataCube, self.RawHeader = self.LoadRawDataForTest()
+        self.NoNDR = self.RawDataCube.shape[0]
         self.time = np.arange(self.NoNDR)*10.48576
+
 
     def LoadRawDataForTest(self):
         """ Loads the data cube for before beginnign all the tests"""
@@ -29,15 +28,39 @@ class BiasCorrectionTests(unittest.TestCase):
     def test_remove_biases_in_cube(self):
         """ Tests the DataCube level Bias subtraction code """
         print('Testing reduction.remove_biases_in_cube')
-        RawDataCube, RawHeader = self.LoadRawDataForTest()
-
-        BiasRemovedDataCube = reduction.remove_biases_in_cube(RawDataCube,
+        BiasRemovedDataCube = reduction.remove_biases_in_cube(self.RawDataCube,
                                                               time=self.time,
                                                               no_channels=4,
                                                               do_LSQmedian_correction=3000)
         # np.save(os.path.join(TestDataDir,'BiasRemovedDataCubeTestResult.npy'),BiasRemovedDataCube)
-        TestResultCube = self.DataCube #np.load(os.path.join(TestDataDir,'BiasRemovedDataCubeTestResult.npy'))
+        TestResultCube = np.load(os.path.join(TestDataDir,'BiasRemovedDataCubeTestResult.npy'))
         np.testing.assert_array_equal(TestResultCube,BiasRemovedDataCube)
+
+    def test_remove_biases_in_cube_NoLSQM(self):
+        """ Tests the DataCube level Bias subtraction code without LSQ median correction"""
+        print('Testing reduction.remove_biases_in_cube without LSQ median correction')
+        BiasRemovedDataCube = reduction.remove_biases_in_cube(self.RawDataCube,
+                                                              time=self.time,
+                                                              no_channels=4,
+                                                              do_LSQmedian_correction=-9999)
+        # np.save(os.path.join(TestDataDir,'BiasRemovedDataCubeTestResult_NoLSQM.npy'),BiasRemovedDataCube)
+        TestResultCube = np.load(os.path.join(TestDataDir,'BiasRemovedDataCubeTestResult_NoLSQM.npy'))
+        np.testing.assert_array_equal(TestResultCube,BiasRemovedDataCube)
+
+    def test_robust_medianfromPercentiles(self):
+        """ Tests the robust median calculation from lower Percentiles """
+        print("Testing robust median calculation from lower Percentiles")
+        np.testing.assert_almost_equal(reduction.robust_medianfromPercentiles(self.RawDataCube[0,:,:]), 12524.4319439, decimal=7)
+        np.testing.assert_almost_equal(reduction.robust_medianfromPercentiles(self.RawDataCube[1,:,:]), 12520.4081537, decimal=7)
+        np.testing.assert_almost_equal(reduction.robust_medianfromPercentiles(self.RawDataCube[2,:,:]), 12527.1396087, decimal=7)
+        np.testing.assert_almost_equal(reduction.robust_medianfromPercentiles(self.RawDataCube[3,:,:]), 12530.8758138, decimal=7)
+        
+
+class SlopeImageGenerationTests(unittest.TestCase):
+    def setUp(self):
+        self.DataCube = np.load(os.path.join(TestDataDir,'BiasRemovedDataCubeTestResult.npy'))
+        self.NoNDR = self.DataCube.shape[0]
+        self.time = np.arange(self.NoNDR)*10.48576
 
     def test_slope_img_from_cube(self):
         """ Test the Slope calculation """
