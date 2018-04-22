@@ -203,7 +203,7 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     # Step 1: Subtract the pedestal bias levels.
     # Removing these first is important to improve the accuracy of estimates of 
     # various statistics in later steps.
-    DataCube -= DataCube[0,:,:]
+    DataCube -= DataCube[0,:,:].copy()
     
     # Step 2: Estimate bias values from top and bottom reference pixels and subtract them for each channel strip.
     # Step 3: Estimate bias value fluctuation in Vertical direction during the readout time, and subtract them from each strip.
