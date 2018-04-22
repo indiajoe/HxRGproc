@@ -55,6 +55,28 @@ class BiasCorrectionTests(unittest.TestCase):
         np.testing.assert_almost_equal(reduction.robust_medianfromPercentiles(self.RawDataCube[2,:,:]), 12527.1396087, decimal=7)
         np.testing.assert_almost_equal(reduction.robust_medianfromPercentiles(self.RawDataCube[3,:,:]), 12530.8758138, decimal=7)
         
+    def test_subtract_reference_pixels(self):
+        """ Tests subtraction of reference pixels in a single frame """
+        print("Testing subtraction of reference pixels in a single frame")
+        RefSubImg = reduction.subtract_reference_pixels(self.RawDataCube[5,:,:].astype(np.float),no_channels=4,statfunc=np.median)
+        # np.save(os.path.join(TestDataDir,'RefpixelSubFrame5.npy'),RefSubImg)
+        TestResultRefSubImg = np.load(os.path.join(TestDataDir,'RefpixelSubFrame5.npy'))
+        np.testing.assert_array_equal(TestResultRefSubImg,RefSubImg)
+
+    def test_pedestalsubtraction(self):
+        """ Tests pedesal subtraction """
+        print('Testing pedestal subtraction')
+        DataCube = self.RawDataCube
+        if DataCube.dtype not in [np.float, np.float_, np.float16, np.float32, np.float64, np.float128]:
+            DataCube = DataCube.astype(np.float)  
+
+        DataCube -= DataCube[0,:,:].copy()  # Pedestal subtractiton
+        
+        PedestalSubFrame = DataCube[5,:,:]
+        # np.save(os.path.join(TestDataDir,'PedestalSubFrame5.npy'),PedestalSubFrame)
+        TestResultPedestalSubFrame = np.load(os.path.join(TestDataDir,'PedestalSubFrame5.npy'))
+        np.testing.assert_array_equal(TestResultPedestalSubFrame,PedestalSubFrame)
+        
 
 class SlopeImageGenerationTests(unittest.TestCase):
     def setUp(self):
