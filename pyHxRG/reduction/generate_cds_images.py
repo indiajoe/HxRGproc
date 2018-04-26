@@ -25,6 +25,8 @@ def calculate_cds_image(FirstImage,LastImage):
     LastImageArray = fits.getdata(LastImage).astype(np.float)  
     CDSimage = LastImageArray - FirstImageArray
     header = fits.getheader(FirstImage)
+    # Do reference pixel subtraction
+    CDSimage = reduction.subtract_reference_pixels(CDSimage,no_channels=header['CHANNELS'])
     header['history'] = 'CDS image generated from {1}-{0}'.format(FirstImage,LastImage)
     hdu = fits.PrimaryHDU(CDSimage,header=header)
     hdulist = fits.HDUList([hdu])
@@ -107,7 +109,7 @@ def main():
 
     INST = args.Instrument
     if INST not in ReadOutSoftware:
-        logging.error('Intrument {0} not supported'.format(INST))
+        logging.error('Instrument {0} not supported'.format(INST))
         sys.exit(1)
 
     if args.logfile is None:
