@@ -188,8 +188,8 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     header['EXPLNDR'] = (time[-1], 'Int Time of Last NDR used in slope')
     header['PEDSUB'] = (Config['DoPedestalSubtraction'], 'T/F Did Pedestal Subtraction')
     header['MLSQBIA'] = (Config['DoLSQmedianCorrection'], 'UpperThreshold to do LSQ median bias algo')
-    header['NLCORR'] = (Config['NonLinearCorrCoeff'], 'NonLinearCorr Coeff File')
-    header['UTHRESH'] = (Config['UpperThreshold'], 'UpperThreshold Mask value/file')
+    header['NLCORR'] = (os.path.basename(Config['NonLinearCorrCoeff']), 'NonLinearCorr Coeff File')
+    header['UTHRESH'] = (os.path.basename(str(Config['UpperThreshold'])), 'UpperThreshold Mask value/file')
     header['CUNITS'] = ('e-/sec','Units of the counts in image')
     header['EPADU'] = (gain,'Gain e/ADU')
     header['READNOS'] = (redn,'Single NDR Read Noise (e- rms)')
@@ -232,7 +232,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
 
         # Save the Average Ramp curves of each region also as a fits extension
         hduAvgRamps = fits.ImageHDU(np.array(AverageRamps).astype('float32'))
-        hduAvgRamps.header['REGFILE'] = (RegionFilename,'Filename of RegionMask/ALL')
+        hduAvgRamps.header['REGFILE'] = (os.path.basename(RegionFilename),'Filename of RegionMask/ALL')
         hduAvgRamps.header['DELTAT'] = (np.median(np.diff(time)), 'Time delta between readout in sec')
         SlopeDerivative = np.diff(np.nanmean(AverageRamps,axis=0))
         try:
