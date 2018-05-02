@@ -287,7 +287,7 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFileFormat='Sl
         os.makedirs(OutputDir)
     except OSError as e:
         if e.errno != errno.EEXIST:
-            logging.info(e)
+            logging.error(e)
             raise
         pass # Ignore the error that Output dir already exist.
 
@@ -319,7 +319,11 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFileFormat='Sl
         for key,value in ExtraHeaderDictFunc(header).items():
             Slopehdulist[0].header[key] = value
 
+    if not os.path.exists(OutputDir): # Verify once again the output directory exist
+        os.makedirs(OutputDir)
+
     Slopehdulist.writeto(OutputFileName)
+
     return OutputFileName
 
 
