@@ -6,21 +6,22 @@ from scipy.ndimage import filters
 import cPickle
 from functools32 import lru_cache
 from scipy import interpolate
+from astropy.stats import biweight_location
 import logging
 
-def subtract_reference_pixels(img,no_channels=32,statfunc=np.median):
+def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
     Input:
          img: 2D full frame Non distructive image readout of HxRG.
          no_channels: Number of channels used in readout. (default:32)
-         statfunc: Function(array,axis) which returns the median/mean etc..
+         statfunc: Function(array,axis) which returns the median/mean etc.. Default is biweight mean for robustness and efficency
 
          IMP Note- If Pedestal is not subtracted out in img, use statfunc=np.mean
-                   If Pedestal is subtracted out, you can use more robust statfunc=np.median
+                   If Pedestal is subtracted out, you can use more robust statfunc=biweight_location
     Output:
          2D image after subtracting the Reference pixel biases using the following procedure.
          Steps:
-           1) For each channel, calculate the mean of the median counts in odd and even pixels of the top and bottom reference pixels.
+           1) For each channel, calculate the robust mean of the median counts in odd and even pixels of the top and bottom reference pixels.
            2) Linearly interpolate this top and bottom reference values across the coulmn strip and subtract.
            3) Combine each channel strips back to a single image.
            4) Median combine horizontally the vertical 4 coulmns of Refernece pixels on both edges of the array.
