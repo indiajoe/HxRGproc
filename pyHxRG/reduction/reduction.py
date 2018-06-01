@@ -43,6 +43,8 @@ def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location):
 
     HRefSubtractedImg = np.hstack(correctedStrips)
     VRef = statfunc(np.hstack((HRefSubtractedImg[:,:4],HRefSubtractedImg[:,-4:])),axis=1)
+    # Remove any DC offset at the edges which could arise due to low value columns in vertical reference pixels
+    VRef = VRef - statfunc(np.concatenate((VRef[:4],VRef[-4:]))) # We can set it to zero since we have subtracted top and bottom reference pixels
     return HRefSubtractedImg - VRef[:,np.newaxis]
 
 def fit_slope_zeroIntercept_residue(X,Y):
