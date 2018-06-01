@@ -6,10 +6,11 @@ from scipy.ndimage import filters
 import cPickle
 from functools32 import lru_cache
 from scipy import interpolate
+from scipy.signal import savgol_filter
 from astropy.stats import biweight_location
 import logging
 
-def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location):
+def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vertical_smooth_window=5):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
     Input:
          img: 2D full frame Non distructive image readout of HxRG.
@@ -18,13 +19,16 @@ def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location):
 
          IMP Note- If Pedestal is not subtracted out in img, use statfunc=np.mean
                    If Pedestal is subtracted out, you can use more robust statfunc=biweight_location
+         vertical_smooth_window (odd +ve int): size of the window for smoothing the vertical reference pixel.
     Output:
          2D image after subtracting the Reference pixel biases using the following procedure.
          Steps:
            1) For each channel, calculate the robust mean of the median counts in odd and even pixels of the top and bottom reference pixels.
            2) Linearly interpolate this top and bottom reference values across the coulmn strip and subtract.
            3) Combine each channel strips back to a single image.
-           4) Median combine horizontally the vertical 4 coulmns of Refernece pixels on both edges of the array.
+           4) Median combine horizontally the vertical 4 coulmns of Refernece pixels on both edges of the array. 
+              Subtract and remove mean value of the edge reference pixels.
+              Optionally smooth the vertical reference columns
            5) Subtract this single column bias drift from all the columns in the array.
 """
     correctedStrips = []
@@ -45,6 +49,9 @@ def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location):
     VRef = statfunc(np.hstack((HRefSubtractedImg[:,:4],HRefSubtractedImg[:,-4:])),axis=1)
     # Remove any DC offset at the edges which could arise due to low value columns in vertical reference pixels
     VRef = VRef - statfunc(np.concatenate((VRef[:4],VRef[-4:]))) # We can set it to zero since we have subtracted top and bottom reference pixels
+    if vertical_smooth_window > 1:
+        vsmoothdegree = 2 if vertical_smooth_window >= 5 else 1
+        VRef = savgol_filter(VRef,window_length=vertical_smooth_window,polyorder=vsmoothdegree)
     return HRefSubtractedImg - VRef[:,np.newaxis]
 
 def fit_slope_zeroIntercept_residue(X,Y):
