@@ -10,7 +10,7 @@ from scipy.signal import savgol_filter
 from astropy.stats import biweight_location
 import logging
 
-def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vertical_smooth_window=5):
+def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vertical_smooth_window=15):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
     Input:
          img: 2D full frame Non distructive image readout of HxRG.
