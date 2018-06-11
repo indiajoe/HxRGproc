@@ -490,6 +490,10 @@ def main():
         OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(InputDir.rstrip('/')))
 
         InputDir = os.path.join(InputDir,Config['InputSubDir']) # Append any redundant input subdirectory to be added
+        if not os.path.isdir(InputDir):
+            logging.error('No image folder {0}'.format(InputDir))
+            logging.info('No images to process in {0}'.format(InputDir))
+            continue # skip to next directory
 
         # Find the number of Ramps in the input Directory
         imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
