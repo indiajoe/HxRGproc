@@ -218,7 +218,9 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     # Step 2: Estimate bias values from top and bottom reference pixels and subtract them for each channel strip.
     # Step 3: Estimate bias value fluctuation in Vertical direction during the readout time, and subtract them from each strip.
     DataCube = np.array([subtract_reference_pixels(ndr,no_channels=no_channels) for ndr in DataCube])
-    
+
+    DataCube[0,:,:] = 0  # Just incase it becomes nan in bias subtraction
+
     if do_LSQmedian_correction > robust_medianfromPercentiles(DataCube[-1,:,:]):
         # Step 4: After the previous step the errors in the bias corrections are Gaussian, since it comes 
         # from the error in estimate of bias from small number of reference pixels.
