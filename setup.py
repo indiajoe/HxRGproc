@@ -4,9 +4,9 @@ def readme():
     with open('README.md') as f:
         return f.read()
 
-setup(name='pyHxRG',
+setup(name='HxRGproc',
       version='0.3',
-      description='Python Tool for Reducing HxRG near-infrared data',
+      description='Python Tool for Processing HxRG detector data',
       long_description = readme(),
       classifiers=[
           'License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)',
@@ -14,14 +14,14 @@ setup(name='pyHxRG',
           'Topic :: Scientific/Engineering :: Astronomy',
       ],
       keywords='H2RG HxRG NIR Astronomy Data Reduction',
-      url='https://github.com/indiajoe/pyHxRG',
+      url='https://github.com/indiajoe/HxRGproc',
       author='Joe Ninan',
       author_email='indiajoe@gmail.com',
       license='LGPLv3+',
-      packages=['pyHxRG','pyHxRG.reduction','pyHxRG.simulator'],
+      packages=['HxRGproc','HxRGproc.reduction','HxRGproc.simulator'],
       entry_points = {
-          'console_scripts': ['generate_slope_images=pyHxRG.reduction.generate_slope_images:main',
-                          'generate_cds_images=pyHxRG.reduction.generate_cds_images:main'],
+          'console_scripts': ['generate_slope_images=HxRGproc.reduction.generate_slope_images:main',
+                          'generate_cds_images=HxRGproc.reduction.generate_cds_images:main'],
       },
       install_requires=[
           'numpy',
