@@ -1,11 +1,13 @@
-pyHxRG
+HxRGproc
 -------
-Reduces or Simulates output of Teledyne HxRG detectors
+Processes or Simulates output of Teledyne HxRG detectors
 
 See `docs/` directory for examples
 
 ## Dependencies for Reduction
 numpy
+scipy
+astropy
 
 ## Dependencies for Simulator
 Noise generator code used is the following (Please cite them if simulator is used)
