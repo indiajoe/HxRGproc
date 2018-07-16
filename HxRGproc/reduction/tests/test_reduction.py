@@ -5,8 +5,8 @@ import os
 import numpy as np
 import cPickle
 
-from pyHxRG.reduction import reduction
-from pyHxRG.reduction import generate_slope_images as gsi
+from HxRGproc.reduction import reduction
+from HxRGproc.reduction import generate_slope_images as gsi
 
 TestDataDir = os.path.join(os.path.dirname(__file__), 'testdata')
 
