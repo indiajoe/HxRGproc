@@ -78,7 +78,7 @@ def parse_args():
     """ Parses the command line input arguments for CDS data reduction of up-the-ramp"""
     parser = argparse.ArgumentParser(description="Script to Generate CDS images from Up-the-Ramp")
     parser.add_argument('InputDir', type=str,
-                        help="Input Directory contiaining the Up-the-Ramp Raw data files")
+                        help="Input Directory contiaining the Up-the-Ramp Raw data files. Multiple directories can be provided comma seperated.")
     parser.add_argument('OutputMasterDir', type=str,
                         help="Output Master Directory to which output CDS images to be written")
     parser.add_argument('Instrument', choices=ReadOutSoftware.keys(),
@@ -120,74 +120,76 @@ def main():
                             level=logging.getLevelName(args.loglevel), 
                             filename=args.logfile, filemode='a')
         logging.getLogger().addHandler(logging.StreamHandler(sys.stdout)) # Sent info to the stdout as well
+    InputDirList = args.InputDir.split(',')
 
-    logging.info('Processing data in {0}'.format(args.InputDir))
+    for InputDir in InputDirList: 
+        logging.info('Processing data in {0}'.format(InputDir))
 
-    OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(args.InputDir.rstrip('/')))
-    RampFilenamePrefix = ReadOutSoftware[INST]['RampFilenameString']
+        OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(InputDir.rstrip('/')))
+        RampFilenamePrefix = ReadOutSoftware[INST]['RampFilenameString']
 
-    InputDir = os.path.join(args.InputDir,ReadOutSoftware[INST]['InputSubDir']) # Append any redundant input subdirectory to be added
+        InputDir = os.path.join(InputDir,ReadOutSoftware[INST]['InputSubDir']) # Append any redundant input subdirectory to be added
 
-    # Find the number of Ramps in the input Directory
-    imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
-    RampList = sorted(set((re.search(ReadOutSoftware[INST]['RampidRegexp'],os.path.basename(f)).group(1) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+        # Find the number of Ramps in the input Directory
+        imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
+        RampList = sorted(set((re.search(ReadOutSoftware[INST]['RampidRegexp'],os.path.basename(f)).group(1) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
 
-    noNDR = None
-    if args.NoNDR_Drop_G is None:
-        if ReadOutSoftware[INST]['estimate_NoNDR_Drop_G_func'] is not None:
-            noNDR,noDrop,noG = ReadOutSoftware[INST]['estimate_NoNDR_Drop_G_func'](imagelist)
-    else:
-        noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
+        noNDR = None
+        if args.NoNDR_Drop_G is None:
+            if ReadOutSoftware[INST]['estimate_NoNDR_Drop_G_func'] is not None:
+                noNDR,noDrop,noG = ReadOutSoftware[INST]['estimate_NoNDR_Drop_G_func'](imagelist)
+        else:
+            noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
 
-    # Do sanity check that all the expected NDRS are available
-    ExpectedFramesPerRamp = noNDR*noG if (noNDR is not None) else None
-        
+        # Do sanity check that all the expected NDRS are available
+        ExpectedFramesPerRamp = noNDR*noG if (noNDR is not None) else None
 
-    CDSImageGenerator = partial(generate_cds_image,
-                                InputDir = InputDir,
-                                OutputDir = OutputDir,
-                                OutputFilePrefix = 'CDS-R',
-                                FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
-                                RampFilenamePrefix = RampFilenamePrefix,
-                                FilenameSortKeyFunc = ReadOutSoftware[INST]['filename_sort_func'])
 
-    
-    logging.info('Output CDS images will be written to {0}'.format(OutputDir))
-    if ExpectedFramesPerRamp is not None:
-        SelectedRampList = []
-        for Ramp in RampList:
-            NoofImages = len([f for f in  imagelist  if RampFilenameString.format(Ramp) in os.path.basename(f)])
-            if  NoofImages == ExpectedFramesPerRamp:
-                SelectedRampList.append(Ramp)
-            else:
-                logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
-                logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
-    else:
-        SelectedRampList = RampList
+        CDSImageGenerator = partial(generate_cds_image,
+                                    InputDir = InputDir,
+                                    OutputDir = OutputDir,
+                                    OutputFilePrefix = 'CDS-R',
+                                    FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
+                                    RampFilenamePrefix = RampFilenamePrefix,
+                                    FilenameSortKeyFunc = ReadOutSoftware[INST]['filename_sort_func'])
 
-    logging.info('Calculating CDS for {0} Ramps in {1}'.format(len(SelectedRampList),args.InputDir))
 
-    # # To Run all in a single process serially. Very useful for debugging
-    # for Ramp in SelectedRampList:
-    #     CDSImageGenerator(Ramp)
-    # Make all the subprocesses inside the pool to ignore SIGINT
-    original_sigint_handler = signal.signal(signal.SIGINT,signal.SIG_IGN)
-    pool = Pool(processes=args.noCPUs)
-    # Make the parent process catch SIGINT by restoring
-    signal.signal(signal.SIGINT,original_sigint_handler)
-    try:
-        outputfiles = pool.map_async(CDSImageGenerator,SelectedRampList)
-        MaximumRunTime = 2*24*60*60 # Two days
-        outputfiles.get(MaximumRunTime) # Wait till everything is over
-    except KeyboardInterrupt:
-        logging.critical('SIGINT Keyboard Interrupt Recevied... Shutting down the script..')
-        pool.terminate()
-    except TimeoutError:
-        logging.critical('TIMEOUT Error. Shutting down the script. (Timeout ={0}s)'.format(MaximumRunTime))
-        pool.terminate()
-    else:
-        pool.close()
-        logging.info('Finished {0}'.format(args.InputDir))
+        logging.info('Output CDS images will be written to {0}'.format(OutputDir))
+        if ExpectedFramesPerRamp is not None:
+            SelectedRampList = []
+            for Ramp in RampList:
+                NoofImages = len([f for f in  imagelist  if RampFilenameString.format(Ramp) in os.path.basename(f)])
+                if  NoofImages == ExpectedFramesPerRamp:
+                    SelectedRampList.append(Ramp)
+                else:
+                    logging.warning('Skipping Incomplete data for Ramp {0}'.format(Ramp))
+                    logging.warning('Expected : {0} frames; Found {1} frames'.format(ExpectedFramesPerRamp,NoofImages))
+        else:
+            SelectedRampList = RampList
+
+        logging.info('Calculating CDS for {0} Ramps in {1}'.format(len(SelectedRampList),InputDir))
+
+        # # To Run all in a single process serially. Very useful for debugging
+        # for Ramp in SelectedRampList:
+        #     CDSImageGenerator(Ramp)
+        # Make all the subprocesses inside the pool to ignore SIGINT
+        original_sigint_handler = signal.signal(signal.SIGINT,signal.SIG_IGN)
+        pool = Pool(processes=args.noCPUs)
+        # Make the parent process catch SIGINT by restoring
+        signal.signal(signal.SIGINT,original_sigint_handler)
+        try:
+            outputfiles = pool.map_async(CDSImageGenerator,SelectedRampList)
+            MaximumRunTime = 2*24*60*60 # Two days
+            outputfiles.get(MaximumRunTime) # Wait till everything is over
+        except KeyboardInterrupt:
+            logging.critical('SIGINT Keyboard Interrupt Recevied... Shutting down the script..')
+            pool.terminate()
+        except TimeoutError:
+            logging.critical('TIMEOUT Error. Shutting down the script. (Timeout ={0}s)'.format(MaximumRunTime))
+            pool.terminate()
+        else:
+            pool.close()
+            logging.info('Finished {0}'.format(InputDir))
 
 ###############################################
 
