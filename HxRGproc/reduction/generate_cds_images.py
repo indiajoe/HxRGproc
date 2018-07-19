@@ -133,6 +133,9 @@ def main():
         # Find the number of Ramps in the input Directory
         imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
         RampList = sorted(set((re.search(ReadOutSoftware[INST]['RampidRegexp'],os.path.basename(f)).group(1) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+        if not RampList:
+            logging.info('No images to process in {0}'.format(InputDir))
+            continue # skip to next directory
 
         noNDR = None
         if args.NoNDR_Drop_G is None:
