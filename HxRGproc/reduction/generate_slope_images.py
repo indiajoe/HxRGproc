@@ -20,6 +20,7 @@ import signal
 import traceback
 import ConfigParser
 from scipy.interpolate import interp1d
+from astropy.stats import biweight_location
 from . import reduction 
 
 
@@ -86,6 +87,8 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     header = FixHeader_func(header)
     DataCube = FixDataCube_func(DataCube)
     time = np.array([FixHeader_func(fits.getheader(f))[HDR_INTTIME] for f in UTRlist])
+
+    header['PEDESVAL'] = biweight_location(DataCube[0])  # Save the pedestal value in header
 
     NoNDR = DataCube.shape[0]
     logging.info('Number of NDRs = {0}'.format(NoNDR))
