@@ -4,7 +4,9 @@ from __future__ import division
 import numpy as np
 from scipy.ndimage import filters
 import cPickle
-from functools32 import lru_cache
+from functools32 import lru_cache, partial
+from multiprocessing.pool import Pool
+from multiprocessing import Manager
 from scipy import interpolate
 from scipy.signal import savgol_filter
 from astropy.stats import biweight_location
@@ -398,6 +400,7 @@ def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
 @lru_cache(maxsize=1)
 def Load_NonLinCorrBsplineDic(pklfilename):
     """ Loads the pickled Bspline corefficent dictionary into a dictionary of Bsplines """
+    logging.info("Loading pickled Bspline corefficent dictionary: {0}".format(pklfilename))
     NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'))
     BsplineDic = {}
     for (i,j),tck in NLcorrTCKdic.iteritems():
@@ -413,7 +416,18 @@ def Load_NonLinCorrBsplineDic(pklfilename):
     return BsplineDic
             
 
-def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreFrames=1):
+def applybsplines(IJarraytuple,DataCube,NLcorrTCKdic):
+    """ Returns the bspline applied vectors of (i,J) in DataCube """
+    ReturnList = []
+    for i,j in zip(IJarraytuple[0],IJarraytuple[1]):
+        try:
+            ReturnList.append(NLcorrTCKdic[(i,j)](DataCube[:,i,j]))
+        except TypeError:
+            # Bspline is None for pixels with no corrections
+            ReturnList.append(DataCube[:,i,j])
+    return ReturnList
+
+def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreFrames=1, noCPUs=4):
     """ Applies the non-linearity correction spline model to Datacube 
     Parameters:
     -----------
@@ -453,13 +467,28 @@ def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreF
     OutDataCube = DataCube  # Overwrite the same array to save memory
 
     # Do the Non-linearity correction
-    for (i,j),bspl in NLcorrTCKdic.iteritems():
-        try:
-            OutDataCube[:,i,j] = bspl(DataCube[:,i,j])
-        except TypeError:
-            # Bspline is None for pixels with no corrections
-            OutDataCube[:,i,j] = DataCube[:,i,j]
-
+    if noCPUs == 1:
+        for (i,j),bspl in NLcorrTCKdic.iteritems():
+            try:
+                OutDataCube[:,i,j] = bspl(DataCube[:,i,j])
+            except TypeError:
+                # Bspline is None for pixels with no corrections
+                OutDataCube[:,i,j] = DataCube[:,i,j]
+    else:
+        multiproxymanager = Manager()
+        proxyNLcorrTCKdic =  multiproxymanager.dict(NLcorrTCKdic)
+        applybsplines_partial = partial(applybsplines,DataCube=DataCube,NLcorrTCKdic=proxyNLcorrTCKdic)
+        ListOfFullIJ = list(NLcorrTCKdic)
+        NoOfPixels = len(ListOfFullIJ)
+        chunksize = NoOfPixels//noCPUs
+        logging.info('No of Pixels: {0}, No of CPUs: {1}, Chunksize: {2}'.format(NoOfPixels,noCPUs,chunksize))
+        IJlist = [zip(*ListOfFullIJ[i:i+chunksize]) for i in range(0,NoOfPixels,chunksize)]
+        pool = Pool(processes=noCPUs)
+        Results = pool.map(applybsplines_partial,IJlist)
+        logging.info('Updating DataCube')
+        for (I,J),corrArray in zip(IJlist,Results):
+            OutDataCube[:,I,J] = np.array(corrArray).T
+        logging.info('Finished NLC correction')
     if UpperThresh is not None:
         if isinstance(UpperThresh,str):
             UpperThresh = np.load(UpperThresh)
