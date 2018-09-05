@@ -10,7 +10,7 @@ from scipy.signal import savgol_filter
 from astropy.stats import biweight_location
 import logging
 
-def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vertical_smooth_window=15):
+def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vertical_smooth_window=15,array_size=2048):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
     Input:
          img: 2D full frame Non distructive image readout of HxRG.
@@ -32,7 +32,7 @@ def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vert
            5) Subtract this single column bias drift from all the columns in the array.
 """
     correctedStrips = []
-    for channelstrip in np.split(img,np.arange(1,no_channels)*int(2048/no_channels),axis=1):
+    for channelstrip in np.split(img,np.arange(1,no_channels)*int(array_size/no_channels),axis=1):
         # Correct odd and even columns seperately
         topRefeven = statfunc(channelstrip[:4,0::2])
         topRefodd = statfunc(channelstrip[:4,1::2])  # Calculate median/mean of odd and even columns                    
@@ -130,7 +130,7 @@ def subtract_median_bias_residue_channel(ChannelCube,time=None,percentile=50):
     ResidueCorrection = BotBiasResidue[:,np.newaxis] + ResidueCorrectionSlopes[:,np.newaxis] * (x - (hsize + hsize/2))[np.newaxis,:]
     return ChannelCube + ResidueCorrection[:,:,np.newaxis]
 
-def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
+def subtract_median_bias_residue(DataCube,no_channels=32,time=None,array_size=2048):
     """ Returns the median residue bias corrected data cube.
     Input: 
         DataCube: The 3D pedestal subtracted, and reference pixel subracted Data Cube. 
@@ -155,7 +155,7 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
         time = np.arange(DataCube.shape[0])
 
     CorrectedCubes = []
-    for ChannelCube in np.split(DataCube,np.arange(1,no_channels)*int(2048/no_channels),axis=2):
+    for ChannelCube in np.split(DataCube,np.arange(1,no_channels)*int(array_size/no_channels),axis=2):
         # We have to do the corection independently for each channel. 
         # Since the median flux levels in each channel will be different.
 
@@ -192,7 +192,7 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
     return np.dstack(CorrectedCubes)
         
 
-def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correction=-99999):
+def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correction=-99999,array_size=2048):
     """ Returns the data cube after removing variable biases from data cube.
     Input:
         DataCube: The 3D Raw readout Data Cube from an up-the-ramp readout of HxRG.
@@ -217,7 +217,7 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     
     # Step 2: Estimate bias values from top and bottom reference pixels and subtract them for each channel strip.
     # Step 3: Estimate bias value fluctuation in Vertical direction during the readout time, and subtract them from each strip.
-    DataCube = np.array([subtract_reference_pixels(ndr,no_channels=no_channels) for ndr in DataCube])
+    DataCube = np.array([subtract_reference_pixels(ndr,no_channels=no_channels,array_size=array_size) for ndr in DataCube])
 
     DataCube[0,:,:] = 0  # Just incase it becomes nan in bias subtraction
 
@@ -225,7 +225,7 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
         # Step 4: After the previous step the errors in the bias corrections are Gaussian, since it comes 
         # from the error in estimate of bias from small number of reference pixels.
         # So, in the next step we shall fit straight line to the full median image sections of each strip and estimate residual bias corrections.
-        DataCube = subtract_median_bias_residue(DataCube,no_channels=no_channels,time=time)
+        DataCube = subtract_median_bias_residue(DataCube,no_channels=no_channels,time=time,array_size=array_size)
 
     return DataCube
 
