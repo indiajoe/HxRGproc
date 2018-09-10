@@ -414,6 +414,19 @@ def Load_NonLinCorrBsplineDic(pklfilename):
     return BsplineDic
             
 
+def applyDicfunctions(DataCube,NLcorrTCKdic):
+    """ Applies the functions in the input dictionary NLcorrTCKdic for the DataCube array """
+    OutDataCube = DataCube  # Overwrite the same array to save memory
+
+    # Do the Non-linearity correction
+    for (i,j),bspl in NLcorrTCKdic.iteritems():
+        try:
+            OutDataCube[:,i,j] = bspl(DataCube[:,i,j])
+        except TypeError:
+            # Bspline is None for pixels with no corrections
+            OutDataCube[:,i,j] = DataCube[:,i,j]
+    return OutDataCube
+
 def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreFrames=1):
     """ Applies the non-linearity correction spline model to Datacube 
     Parameters:
@@ -451,15 +464,11 @@ def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreF
         # Add the Flux to DataCube
         DataCube += CrudeFlux*NoOfPreFrames
 
-    OutDataCube = DataCube  # Overwrite the same array to save memory
 
-    # Do the Non-linearity correction
-    for (i,j),bspl in NLcorrTCKdic.iteritems():
-        try:
-            OutDataCube[:,i,j] = bspl(DataCube[:,i,j])
-        except TypeError:
-            # Bspline is None for pixels with no corrections
-            OutDataCube[:,i,j] = DataCube[:,i,j]
+    if isinstance(NLcorrTCKdic,dict):
+        # Apply the functions in the dictionary for non-linearity correction
+        OutDataCube = applyDicfunctions(DataCube,NLcorrTCKdic)
+
     logging.info('Finished NLC correction')
     if UpperThresh is not None:
         if isinstance(UpperThresh,str):
