@@ -9,6 +9,8 @@ from scipy import interpolate
 from scipy.signal import savgol_filter
 from astropy.stats import biweight_location
 import logging
+import socket
+from cStringIO import StringIO
 
 def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vertical_smooth_window=15,array_size=2048):
     """ Returns the readoud image after subtracting reference pixels of H2RG.
@@ -427,6 +429,35 @@ def applyDicfunctions(DataCube,NLcorrTCKdic):
             OutDataCube[:,i,j] = DataCube[:,i,j]
     return OutDataCube
 
+def get_RemoteProcessedData(DataCube,port,hostname="localhost"):
+    """ Sends the DataCube to server at hostname:port and return the data received back from server """
+    client_socket = socket.socket()
+    try:
+        client_socket.connect((hostname,port))
+    except socket.error as e:
+        logging.error('Unable to connect to Data Processing server {0}:{1}'.format(hostname,port))
+        raise
+    logging.info('Sending ndarray of shape {0} to {1}:{2}'.format(DataCube.shape,hostname,port))
+    # Send the Array               
+    f = StringIO()
+    np.save(f,DataCube)
+    f.seek(0)
+    client_socket.sendall(f.read())
+    f.close()
+
+    # Now start reading back form the socket
+    ultimate_buffer = ""
+    while True:
+        receiving_buffer = client_socket.recv(1024)
+        if not receiving_buffer: break
+        ultimate_buffer += receiving_buffer
+
+    DataBack = np.load(StringIO(ultimate_buffer))
+    logging.info('Received back ndarray of shape {0}'.format(DataBack.shape))
+    client_socket.close()
+    return DataBack
+    
+
 def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreFrames=1):
     """ Applies the non-linearity correction spline model to Datacube 
     Parameters:
@@ -436,6 +467,7 @@ def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreF
     NLcorrTCKdic: String or Dictionary
                 Either the file name of the .pkl file which has the dictionary of non-linearity 
                 correction Bspline tck coefficents from which to create Bspline dic.
+                Or the identifier:port to send data to localhost:port and get back corrected data
                 Or the dictionary of the Bsplines directly
     UpperThresh: String or numpy 2d array (optional, default:None)
                 Upper Threshold value of the pixel count for each pixel above which non-linearity 
@@ -456,14 +488,19 @@ def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreF
                   with all values which was above UpperThresh masked.
     
     """
-    if isinstance(NLcorrTCKdic,str):
-        NLcorrTCKdic = Load_NonLinCorrBsplineDic(NLcorrTCKdic)
-
     if NoOfPreFrames: # If NoOfPreFrames is not Zero, we have to caluclate flux and add
         CrudeFlux = np.median(np.diff(DataCube,axis=0),axis=0)
         # Add the Flux to DataCube
         DataCube += CrudeFlux*NoOfPreFrames
 
+
+    if isinstance(NLcorrTCKdic,str) and (':' in NLcorrTCKdic) and (NLcorrTCKdic.split(':')[-1].isdigit()) :
+        # Socket Port number provided. Send the data to the port and get back corrected data directly
+        OutDataCube = get_RemoteProcessedData(DataCube,int(NLcorrTCKdic.split(':')[-1]))
+
+    elif isinstance(NLcorrTCKdic,str):
+        # Normal pickle file to load and process in the next step
+        NLcorrTCKdic = Load_NonLinCorrBsplineDic(NLcorrTCKdic)
 
     if isinstance(NLcorrTCKdic,dict):
         # Apply the functions in the dictionary for non-linearity correction
