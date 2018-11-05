@@ -495,8 +495,12 @@ def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreF
 
 
     if isinstance(NLcorrTCKdic,str) and (':' in NLcorrTCKdic) and (NLcorrTCKdic.split(':')[-1].isdigit()) :
-        # Socket Port number provided. Send the data to the port and get back corrected data directly
-        OutDataCube = get_RemoteProcessedData(DataCube,int(NLcorrTCKdic.split(':')[-1]))
+        try:
+            # Socket Port number provided. Send the data to the port and get back corrected data directly
+            OutDataCube = get_RemoteProcessedData(DataCube,int(NLcorrTCKdic.split(':')[-1]))
+        except OverflowError:
+            logging.warn('DataCube of size {0} is too big to send over socket. Fallingback to {1}'.format(DataCube.shape,NLcorrTCKdic.split(':')[-2]))
+            NLcorrTCKdic = Load_NonLinCorrBsplineDic(NLcorrTCKdic.split(':')[-2])
 
     elif isinstance(NLcorrTCKdic,str):
         # Normal pickle file to load and process in the next step
