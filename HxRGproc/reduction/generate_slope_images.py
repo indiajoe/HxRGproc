@@ -383,9 +383,9 @@ def FixHeader_func_HPFLinux(header):
             FrameTime = header['FRMTIME']
         except KeyError:
             if header['CHANNELS'] == 4:
-                FrameTime = 10.48576 
+                FrameTime = 10.65 # 10.48576 
             elif header['CHANNELS'] == 32:
-                FrameTime = 10.48576/8. 
+                FrameTime = 10.65/8. 
             else:
                 raise
         
