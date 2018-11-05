@@ -600,6 +600,16 @@ ReadOutSoftware = {
                 'FixDataCube_func': FixDataCube_func_HPFLinux, # Optional function call to fix input Data Cube
                 'estimate_NoNDR_Drop_G_func':None,
                 'ExtraHeaderCalculations_func':None},
+    'HPFMACIE':{'RampFilenameString' : 'hpf_{0}_F', #Input filename structure with Ramp id substitution
+                'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
+                'HDR_NOUTPUTS' : 'CHANNELS', # Fits header for number of output channels
+                'HDR_INTTIME' : 'ITIME', # Fits header for accumulated exposure time in each NDR
+                'filename_sort_func': FileNameSortKeyFunc_HPFLinux,
+                'FixHeader_func': lambda hdr: hdr, # Optional function call to fix input raw header
+                'FixDataCube_func': lambda Dcube: Dcube, # Optional function call to fix input Data Cube
+                'estimate_NoNDR_Drop_G_func':None,
+                'ExtraHeaderCalculations_func':None},
+
     }
 
 
