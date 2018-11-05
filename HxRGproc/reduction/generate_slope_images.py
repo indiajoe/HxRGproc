@@ -189,6 +189,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
 
     header['NoNDR'] = (NoNDR, 'No of NDRs used in slope')
     header['EXPLNDR'] = (time[-1], 'Int Time of Last NDR used in slope')
+    header['ITIME'] = time[-1]  # Update the ITIME in the header of the first image with the last NDR's
     header['PEDSUB'] = (Config['DoPedestalSubtraction'], 'T/F Did Pedestal Subtraction')
     header['MLSQBIA'] = (Config['DoLSQmedianCorrection'], 'UpperThreshold to do LSQ median bias algo')
     header['NLCORR'] = (os.path.basename(Config['NonLinearCorrCoeff']), 'NonLinearCorr Coeff File')
