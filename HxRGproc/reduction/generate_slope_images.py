@@ -413,7 +413,8 @@ def FixDataCube_func_HPFLinux(DataCube):
 #####
 
 def parse_str_to_types(string):
-    """ Converts string to different object types they represent """
+    """ Converts string to different object types they represent.
+    Supported formats: True,Flase,None,int,float,list,tuple"""
     if string == 'True':
         return True
     elif string == 'False':
@@ -422,6 +423,8 @@ def parse_str_to_types(string):
         return None
     elif string.lstrip('-+ ').isdigit():
         return int(string)
+    elif (string[0] in '[(') and (string[-1] in ')]'): # Recursively parse a list/tuple into a list
+        return [parse_str_to_types(s) for s in string.strip('()[]').split(',')]
     else:
         try:
             return float(string)
