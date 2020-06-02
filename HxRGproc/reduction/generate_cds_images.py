@@ -15,7 +15,9 @@ import logging
 import signal
 import traceback
 from . import reduction 
-from .generate_slope_images import estimate_NoNDR_Drop_G_TeledyneData, FileNameSortKeyFunc_Teledyne, FileNameSortKeyFunc_HPFLinux, pack_traceback_to_errormsg, log_all_uncaughtexceptions_handler, LogMemoryErrors
+from .generate_slope_images import pack_traceback_to_errormsg, log_all_uncaughtexceptions_handler, LogMemoryErrors
+from .instruments import ReadOutSoftware_cds as ReadOutSoftware
+
 try:
     import ConfigParser
     from functools32 import wraps, partial
@@ -199,24 +201,6 @@ def main():
             pool.close()
             logging.info('Finished {0}'.format(InputDir))
 
-###############################################
-
-# Instrument specific configuration
-# Register functions which are specific to each readout software output in dictionary below
-ReadOutSoftware = {
-    'TeledyneWindows':{'RampFilenameString' : 'H2RG_R{0}_M', #Input filename structure with Ramp id substitution
-                       'RampidRegexp' : 'H2RG_R(.+?)_M', # Regexp to extract unique Ramp id from filename
-                       'InputSubDir' : '', # Append any redundant input subdirectory to be added
-
-                       'filename_sort_func' : FileNameSortKeyFunc_Teledyne,
-                       'estimate_NoNDR_Drop_G_func' : estimate_NoNDR_Drop_G_TeledyneData},
-
-    'HPFLinux':{'RampFilenameString' : 'hpf_{0}_F', #Input filename structure with Ramp id substitution
-                'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
-                'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
-                'filename_sort_func': FileNameSortKeyFunc_HPFLinux,
-                'estimate_NoNDR_Drop_G_func':None},
-    }
 
 
 if __name__ == "__main__":
