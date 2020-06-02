@@ -3,14 +3,20 @@
 from __future__ import division
 import numpy as np
 from scipy.ndimage import filters
-import cPickle
-from functools32 import lru_cache
 from scipy import interpolate
 from scipy.signal import savgol_filter
 from astropy.stats import biweight_location
 import logging
 import socket
-from cStringIO import StringIO
+try:
+    import cPickle
+    from cStringIO import StringIO
+    from functools32 import lru_cache
+except ModuleNotFoundError: # Python 3 environment
+    import pickle as cPickle
+    from io import StringIO
+    from functools import lru_cache
+
 
 def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vertical_smooth_window=15,array_size=2048):
     """ Returns the readoud image after subtracting reference pixels of H2RG.

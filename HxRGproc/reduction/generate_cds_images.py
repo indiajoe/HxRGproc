@@ -11,13 +11,18 @@ import re
 import errno
 from multiprocessing import TimeoutError
 from multiprocessing.pool import Pool
-from functools32 import wraps, partial
 import logging
 import signal
 import traceback
-import ConfigParser
 from . import reduction 
 from .generate_slope_images import estimate_NoNDR_Drop_G_TeledyneData, FileNameSortKeyFunc_Teledyne, FileNameSortKeyFunc_HPFLinux, pack_traceback_to_errormsg, log_all_uncaughtexceptions_handler, LogMemoryErrors
+try:
+    import ConfigParser
+    from functools32 import wraps, partial
+except ModuleNotFoundError:  # Python 3 environment
+    import configparser as ConfigParser
+    from functools import wraps, partial
+
 
 def calculate_cds_image(FirstImage,LastImage):
     """ Returns the LastImage-FirstImage data hdulist and header """

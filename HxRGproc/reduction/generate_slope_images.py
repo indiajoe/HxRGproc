@@ -14,14 +14,19 @@ from astropy.time import Time, TimezoneInfo
 import astropy.units as u
 from multiprocessing import TimeoutError
 from multiprocessing.pool import Pool
-from functools32 import wraps, partial
 import logging
 import signal
 import traceback
-import ConfigParser
 from scipy.interpolate import interp1d
 from astropy.stats import biweight_location
 from . import reduction 
+try:
+    import ConfigParser
+    from functools32 import wraps, partial
+except ModuleNotFoundError:  # Python 3 environment
+    import configparser as ConfigParser
+    from functools import wraps, partial
+
 
 
 def pack_traceback_to_errormsg(func):
