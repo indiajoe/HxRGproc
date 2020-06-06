@@ -15,8 +15,8 @@ import logging
 import signal
 import traceback
 from . import reduction 
-from .generate_slope_images import pack_traceback_to_errormsg, log_all_uncaughtexceptions_handler, LogMemoryErrors
-from .instruments import ReadOutSoftware_cds as ReadOutSoftware
+from .generate_slope_images import pack_traceback_to_errormsg, log_all_uncaught_exceptions_handler, log_memory_errors
+from .instruments import SupportedReadOutSoftware_for_cds as READOUT_SOFTWARE
 
 try:
     import ConfigParser
@@ -42,7 +42,7 @@ def calculate_cds_image(FirstImage,LastImage):
 
 # @pack_traceback_to_errormsg can be commented out when function not used in multiprocess
 @pack_traceback_to_errormsg
-@LogMemoryErrors
+@log_memory_errors
 def generate_cds_image(RampNo,InputDir,OutputDir,OutputFilePrefix='CDS-R',
                        FirstNDR=0,LastNDR=None,
                        RampFilenamePrefix='H2RG_R{0:02}_M',
@@ -88,7 +88,7 @@ def parse_args():
                         help="Input Directory contiaining the Up-the-Ramp Raw data files. Multiple directories can be provided comma seperated.")
     parser.add_argument('OutputMasterDir', type=str,
                         help="Output Master Directory to which output CDS images to be written")
-    parser.add_argument('Instrument', choices=ReadOutSoftware.keys(),
+    parser.add_argument('Instrument', choices=READOUT_SOFTWARE.keys(),
                         help="Name of the supported instrument data")
     parser.add_argument('--NoNDR_Drop_G', type=str, default=None,
                         help="No of NDRS per Group:No of Drops:No of Groups (Example  40:60:5)")
@@ -110,13 +110,13 @@ def parse_args():
 def main():
     """ Standalone Script to generate CDS images from Up the Ramp data"""
     # Override the default exception hook with our custom handler
-    sys.excepthook = log_all_uncaughtexceptions_handler
+    sys.excepthook = log_all_uncaught_exceptions_handler
 
     args = parse_args()    
 
-    INST = args.Instrument
-    if INST not in ReadOutSoftware:
-        logging.error('Instrument {0} not supported'.format(INST))
+    inst = args.Instrument
+    if inst not in READOUT_SOFTWARE:
+        logging.error('Instrument {0} not supported'.format(inst))
         sys.exit(1)
 
     if args.logfile is None:
@@ -133,21 +133,21 @@ def main():
         logging.info('Processing data in {0}'.format(InputDir))
 
         OutputDir = os.path.join(args.OutputMasterDir,os.path.basename(InputDir.rstrip('/')))
-        RampFilenamePrefix = ReadOutSoftware[INST]['RampFilenameString']
+        RampFilenamePrefix = READOUT_SOFTWARE[inst]['RampFilenameString']
 
-        InputDir = os.path.join(InputDir,ReadOutSoftware[INST]['InputSubDir']) # Append any redundant input subdirectory to be added
+        InputDir = os.path.join(InputDir,READOUT_SOFTWARE[inst]['InputSubDir']) # Append any redundant input subdirectory to be added
 
         # Find the number of Ramps in the input Directory
         imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
-        RampList = sorted(set((re.search(ReadOutSoftware[INST]['RampidRegexp'],os.path.basename(f)).group(1) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+        RampList = sorted(set((re.search(READOUT_SOFTWARE[inst]['RampidRegexp'],os.path.basename(f)).group(1) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
         if not RampList:
             logging.info('No images to process in {0}'.format(InputDir))
             continue # skip to next directory
 
         noNDR = None
         if args.NoNDR_Drop_G is None:
-            if ReadOutSoftware[INST]['estimate_NoNDR_Drop_G_func'] is not None:
-                noNDR,noDrop,noG = ReadOutSoftware[INST]['estimate_NoNDR_Drop_G_func'](imagelist)
+            if READOUT_SOFTWARE[inst]['estimate_NoNDR_Drop_G_func'] is not None:
+                noNDR,noDrop,noG = READOUT_SOFTWARE[inst]['estimate_NoNDR_Drop_G_func'](imagelist)
         else:
             noNDR,noDrop,noG = tuple([int(i) for i in args.NoNDR_Drop_G.split(':')])
 
@@ -161,7 +161,7 @@ def main():
                                     OutputFilePrefix = 'CDS-R',
                                     FirstNDR = args.FirstNDR, LastNDR = args.LastNDR,
                                     RampFilenamePrefix = RampFilenamePrefix,
-                                    FilenameSortKeyFunc = ReadOutSoftware[INST]['filename_sort_func'])
+                                    FilenameSortKeyFunc = READOUT_SOFTWARE[inst]['filename_sort_func'])
 
 
         logging.info('Output CDS images will be written to {0}'.format(OutputDir))

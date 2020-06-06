@@ -11,11 +11,11 @@ from scipy.interpolate import interp1d
 #####################################################################
 #### Functions specific to help reduce Windows Teledyne software data
 #####################################################################
-def FileNameSortKeyFunc_Teledyne(fname):
+def sort_filename_key_function_Teledyne(fname):
     """ Function which returns the key to sort Teledyne filename """
     return tuple(map(int,re.search('H2RG_R(.+?)_M(.+?)_N(.+?).fits',os.path.basename(fname)).group(1,2,3)))
 
-def ExtraHeaderCalculations4Windows(header,Ramptime):
+def extra_header_calculations_Teledyne(header,Ramptime):
     """ Returns a dictionary of extra entires for slope header """
     utc_minus_four_hour = TimezoneInfo(utc_offset=-4*u.hour)
     month2nub ={'Jan':1,'Feb':2,'Mar':3,'Apr':4,'May':5,'Jun':6,'Jul':7,'Aug':8,'Sep':9,'Oct':10,'Nov':11,'Dec':12}
@@ -29,7 +29,7 @@ def ExtraHeaderCalculations4Windows(header,Ramptime):
 
     return ExtraHeader
 
-def estimate_NoNDR_Drop_G_TeledyneData(imagelist):
+def estimate_NoNDR_Drops_G_Teledyne(imagelist):
     """ Returns (No of NDRs in Group, Drops, number of Groups) based on the imagename list """
     RampList = sorted(set((int(re.search('H2RG_R(.+?)_M',os.path.basename(f)).group(1)) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
     GroupList = sorted(set((int(re.search('H2RG_R.+?_M(.+?)_',os.path.basename(f)).group(1)) for f in imagelist))) # 5 in H2RG_R01_M05_N01.fits
@@ -53,11 +53,11 @@ def estimate_NoNDR_Drop_G_TeledyneData(imagelist):
 #####################################################################
 #### Functions specific to reduce HPFLinux software data
 #####################################################################
-def FileNameSortKeyFunc_HPFLinux(fname):
+def sort_filename_key_function_HPFLinux(fname):
     """ Function which returns the key to sort HPFLinux filename """
     return tuple(map(int,re.search('hpf_(\d+?)T(\d+?)_R(\d+?)_F(\d+?).fits',os.path.basename(fname)).group(1,2,3,4)))
 
-def FixHeader_func_HPFLinux(header):
+def fix_header_function_HPFLinux(header):
     """ Funtion to fix any missing headers needed in header """
     if 'ITIME' not in header:
         try:
@@ -73,7 +73,7 @@ def FixHeader_func_HPFLinux(header):
         header['ITIME'] = header['FRAMENUM']*FrameTime
     return header
 
-def FixDataCube_func_HPFLinux(DataCube):
+def fix_datacube_function_HPFLinux(DataCube):
     """Fixes the zero readout rows in datacube """
     if np.any(DataCube[:,:,-1] == 0) : # Fix last blank column
         DataCube[:,:,-1] = DataCube[:,:,-2]
@@ -100,31 +100,31 @@ def FixDataCube_func_HPFLinux(DataCube):
 #####################################################################
 # For the generate_slope_images.py
 
-ReadOutSoftware_slope = {
+SupportedReadOutSoftware_for_slope = {
     'TeledyneWindows':{'RampFilenameString' : 'H2RG_R{0}_M', #Input filename structure with Ramp id substitution
                        'RampidRegexp' : 'H2RG_R(.+?)_M', # Regexp to extract unique Ramp id from filename
                        'HDR_NOUTPUTS' : 'NOUTPUTS', # Fits header for number of output channels
                        'HDR_INTTIME' : 'INTTIME', # Fits header for accumulated exposure time in each NDR
-                       'filename_sort_func' : FileNameSortKeyFunc_Teledyne,
+                       'filename_sort_func' : sort_filename_key_function_Teledyne,
                        'FixHeader_func': lambda hdr: hdr, # Optional function call to fix input raw header
                        'FixDataCube_func': lambda Dcube: Dcube, # Optional function call to fix input Data Cube
-                       'estimate_NoNDR_Drop_G_func' : estimate_NoNDR_Drop_G_TeledyneData,
-                       'ExtraHeaderCalculations_func' : ExtraHeaderCalculations4Windows},
+                       'estimate_NoNDR_Drop_G_func' : estimate_NoNDR_Drops_G_Teledyne,
+                       'ExtraHeaderCalculations_func' : extra_header_calculations_Teledyne},
 
     'HPFLinux':{'RampFilenameString' : 'hpf_{0}_F', #Input filename structure with Ramp id substitution
                 'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
                 'HDR_NOUTPUTS' : 'CHANNELS', # Fits header for number of output channels
                 'HDR_INTTIME' : 'ITIME', # Fits header for accumulated exposure time in each NDR
-                'filename_sort_func': FileNameSortKeyFunc_HPFLinux,
-                'FixHeader_func': FixHeader_func_HPFLinux, # Optional function call to fix input raw header
-                'FixDataCube_func': FixDataCube_func_HPFLinux, # Optional function call to fix input Data Cube
+                'filename_sort_func': sort_filename_key_function_HPFLinux,
+                'FixHeader_func': fix_header_function_HPFLinux, # Optional function call to fix input raw header
+                'FixDataCube_func': fix_datacube_function_HPFLinux, # Optional function call to fix input Data Cube
                 'estimate_NoNDR_Drop_G_func':None,
                 'ExtraHeaderCalculations_func':None},
     'HPFMACIE':{'RampFilenameString' : 'hpf_{0}_F', #Input filename structure with Ramp id substitution
                 'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
                 'HDR_NOUTPUTS' : 'CHANNELS', # Fits header for number of output channels
                 'HDR_INTTIME' : 'ITIME', # Fits header for accumulated exposure time in each NDR
-                'filename_sort_func': FileNameSortKeyFunc_HPFLinux,
+                'filename_sort_func': sort_filename_key_function_HPFLinux,
                 'FixHeader_func': lambda hdr: hdr, # Optional function call to fix input raw header
                 'FixDataCube_func': lambda Dcube: Dcube, # Optional function call to fix input Data Cube
                 'estimate_NoNDR_Drop_G_func':None,
@@ -138,21 +138,21 @@ ReadOutSoftware_slope = {
 #####################################################################
 # For the generate_cds_images.py
 
-ReadOutSoftware_cds = {
+SupportedReadOutSoftware_for_cds = {
     'TeledyneWindows':{'RampFilenameString' : 'H2RG_R{0}_M', #Input filename structure with Ramp id substitution
                        'RampidRegexp' : 'H2RG_R(.+?)_M', # Regexp to extract unique Ramp id from filename
                        'InputSubDir' : '', # Append any redundant input subdirectory to be added
-                       'filename_sort_func' : FileNameSortKeyFunc_Teledyne,
-                       'estimate_NoNDR_Drop_G_func' : estimate_NoNDR_Drop_G_TeledyneData},
+                       'filename_sort_func' : sort_filename_key_function_Teledyne,
+                       'estimate_NoNDR_Drop_G_func' : estimate_NoNDR_Drops_G_Teledyne},
 
     'HPFLinux':{'RampFilenameString' : 'hpf_{0}_F', #Input filename structure with Ramp id substitution
                 'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
                 'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
-                'filename_sort_func': FileNameSortKeyFunc_HPFLinux,
+                'filename_sort_func': sort_filename_key_function_HPFLinux,
                 'estimate_NoNDR_Drop_G_func':None},
     'HPFMACIE':{'RampFilenameString' : 'hpf_{0}_F', #Input filename structure with Ramp id substitution
                 'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
                 'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
-                'filename_sort_func': FileNameSortKeyFunc_HPFLinux,
+                'filename_sort_func': sort_filename_key_function_HPFLinux,
                 'estimate_NoNDR_Drop_G_func':None}
 }

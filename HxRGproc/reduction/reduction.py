@@ -62,7 +62,7 @@ def subtract_reference_pixels(img,no_channels=32,statfunc=biweight_location,vert
         VRef = savgol_filter(VRef,window_length=vertical_smooth_window,polyorder=vsmoothdegree)
     return HRefSubtractedImg - VRef[:,np.newaxis]
 
-def fit_slope_zeroIntercept_residue(X,Y):
+def fit_slope_with_zero_intercept_residue(X,Y):
     """ Returns the residue of a LSQ fitted straight line Y = mX, with intercept fixed to zero """
     X = np.array(X)
     Y = np.array(Y)
@@ -81,14 +81,14 @@ def fit_slope_1d(X,Y):
     alpha = Sy/n - slope*Sx/n
     return slope, alpha
 
-def fit_slope_andget_residue(X,Y):
+def fit_slope_1d_residue(X,Y):
     """ Returns the residue of a LSQ fitted straight line Y = mX +c """
     X = np.array(X)
     Y = np.array(Y)
     slope, alpha =  fit_slope_1d(X,Y)
     return  slope*X + alpha - Y 
 
-def robust_medianfromPercentiles(array,percentiles=()):
+def robust_median_from_percentiles(array,percentiles=()):
     """ Estimates the median from percentiles of data in array.
     Warning: Assumes Normal distribution of data in the used percentile ranges
     Useful for estimating median in array when a fraciton of pixels are illuminated 
@@ -130,8 +130,8 @@ def subtract_median_bias_residue_channel(ChannelCube,time=None,percentile=50):
         time = np.arange(ChannelCube.shape[0])
     hsize = int(ChannelCube.shape[1]/2)
 
-    TopBiasResidue = fit_slope_zeroIntercept_residue(time,[np.percentile(tile,percentile) for tile in ChannelCube[:,0:hsize,:]])
-    BotBiasResidue = fit_slope_zeroIntercept_residue(time,[np.percentile(tile,percentile) for tile in ChannelCube[:,hsize:,:]])
+    TopBiasResidue = fit_slope_with_zero_intercept_residue(time,[np.percentile(tile,percentile) for tile in ChannelCube[:,0:hsize,:]])
+    BotBiasResidue = fit_slope_with_zero_intercept_residue(time,[np.percentile(tile,percentile) for tile in ChannelCube[:,hsize:,:]])
     
     ResidueCorrectionSlopes = (TopBiasResidue - BotBiasResidue)/(hsize/2 - (hsize + hsize/2))
     x = np.arange(ChannelCube.shape[1])
@@ -168,15 +168,15 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None,array_size=20
         # Since the median flux levels in each channel will be different.
 
         # Calculate top bias values (Odd and even seperately concatenated)
-        TopOddEvenBiases = [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,1::2]] +\
-                           [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,0:hsize,0::2]]
+        TopOddEvenBiases = [robust_median_from_percentiles(tile) for tile in ChannelCube[:,0:hsize,1::2]] +\
+                           [robust_median_from_percentiles(tile) for tile in ChannelCube[:,0:hsize,0::2]]
         # Calculate bottom bias values
-        BottomOddEvenBiases = [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,1::2]] +\
-                              [robust_medianfromPercentiles(tile) for tile in ChannelCube[:,hsize:,0::2]]
+        BottomOddEvenBiases = [robust_median_from_percentiles(tile) for tile in ChannelCube[:,hsize:,1::2]] +\
+                              [robust_median_from_percentiles(tile) for tile in ChannelCube[:,hsize:,0::2]]
 
         # Fit a straight line and calcuate the residue shifts due to bias fluctuations
-        TopResidue = fit_slope_andget_residue(np.tile(time,2), TopOddEvenBiases)
-        BottomResidue = fit_slope_andget_residue(np.tile(time,2), BottomOddEvenBiases)
+        TopResidue = fit_slope_1d_residue(np.tile(time,2), TopOddEvenBiases)
+        BottomResidue = fit_slope_1d_residue(np.tile(time,2), BottomOddEvenBiases)
 
         TopOddResidues, TopEvenResidues = np.split(TopResidue,2)
         BottomOddResidues, BottomEvenResidues = np.split(BottomResidue,2)
@@ -229,7 +229,7 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
 
     DataCube[0,:,:] = 0  # Just incase it becomes nan in bias subtraction
 
-    if do_LSQmedian_correction > robust_medianfromPercentiles(DataCube[-1,:,:]):
+    if do_LSQmedian_correction > robust_median_from_percentiles(DataCube[-1,:,:]):
         # Step 4: After the previous step the errors in the bias corrections are Gaussian, since it comes 
         # from the error in estimate of bias from small number of reference pixels.
         # So, in the next step we shall fit straight line to the full median image sections of each strip and estimate residual bias corrections.
@@ -238,7 +238,7 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     return DataCube
 
 
-def remove_bias_preservepedestal_in_cube(DataCube,no_channels=32):
+def remove_bias_preserve_pedestal_in_cube(DataCube,no_channels=32):
     """ Returns the data cube after removing only variable biases from data cube. And preserves the pedestal bias.
     Input:
         DataCube: The 3D Raw readout Data Cube from an up-the-ramp readout of HxRG.
@@ -321,7 +321,7 @@ def varience_of_slope(slope,NoOfPoints,tframe,redn,gain):
           12*(redn**2 + gain**2 / 12.)/(NoOfPoints*(NoOfPoints**2 -1)*tframe**2)
     return Var
 
-def piecewise_avgSlopeVar(MaskedDataVector,time,redn,gain):
+def piecewise_avg_slope_var(MaskedDataVector,time,redn,gain):
     """ Returns the average slope and varience by estimating slope at each continous non masked 
     regions in the input MaskedDataVector 
     Parameters:
@@ -404,7 +404,7 @@ def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
     return OutDataCube
 
 @lru_cache(maxsize=1)
-def Load_NonLinCorrBsplineDic(pklfilename):
+def load_nonlinearcorr_bspline_dic(pklfilename):
     """ Loads the pickled Bspline corefficent dictionary into a dictionary of Bsplines """
     logging.info("Loading pickled Bspline corefficent dictionary: {0}".format(pklfilename))
     NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'))
@@ -422,7 +422,7 @@ def Load_NonLinCorrBsplineDic(pklfilename):
     return BsplineDic
             
 
-def applyDicfunctions(DataCube,NLcorrTCKdic):
+def apply_dic_functions(DataCube,NLcorrTCKdic):
     """ Applies the functions in the input dictionary NLcorrTCKdic for the DataCube array """
     OutDataCube = DataCube  # Overwrite the same array to save memory
 
@@ -435,7 +435,7 @@ def applyDicfunctions(DataCube,NLcorrTCKdic):
             OutDataCube[:,i,j] = DataCube[:,i,j]
     return OutDataCube
 
-def get_RemoteProcessedData(DataCube,port,hostname="localhost"):
+def get_remote_processed_data(DataCube,port,hostname="localhost"):
     """ Sends the DataCube to server at hostname:port and return the data received back from server """
     client_socket = socket.socket()
     try:
@@ -503,18 +503,18 @@ def apply_nonlinearcorr_bspline(DataCube,NLcorrTCKdic,UpperThresh=None, NoOfPreF
     if isinstance(NLcorrTCKdic,str) and (':' in NLcorrTCKdic) and (NLcorrTCKdic.split(':')[-1].isdigit()) :
         try:
             # Socket Port number provided. Send the data to the port and get back corrected data directly
-            OutDataCube = get_RemoteProcessedData(DataCube,int(NLcorrTCKdic.split(':')[-1]))
+            OutDataCube = get_remote_processed_data(DataCube,int(NLcorrTCKdic.split(':')[-1]))
         except OverflowError:
             logging.warn('DataCube of size {0} is too big to send over socket. Fallingback to {1}'.format(DataCube.shape,NLcorrTCKdic.split(':')[-2]))
-            NLcorrTCKdic = Load_NonLinCorrBsplineDic(NLcorrTCKdic.split(':')[-2])
+            NLcorrTCKdic = load_nonlinearcorr_bspline_dic(NLcorrTCKdic.split(':')[-2])
 
     elif isinstance(NLcorrTCKdic,str):
         # Normal pickle file to load and process in the next step
-        NLcorrTCKdic = Load_NonLinCorrBsplineDic(NLcorrTCKdic)
+        NLcorrTCKdic = load_nonlinearcorr_bspline_dic(NLcorrTCKdic)
 
     if isinstance(NLcorrTCKdic,dict):
         # Apply the functions in the dictionary for non-linearity correction
-        OutDataCube = applyDicfunctions(DataCube,NLcorrTCKdic)
+        OutDataCube = apply_dic_functions(DataCube,NLcorrTCKdic)
 
     logging.info('Finished NLC correction')
     if UpperThresh is not None:

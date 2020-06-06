@@ -18,7 +18,7 @@ import signal
 import traceback
 from astropy.stats import biweight_location
 from . import reduction 
-from .instruments import ReadOutSoftware_slope as ReadOutSoftware
+from .instruments import SupportedReadOutSoftware_for_slope as READOUT_SOFTWARE
 
 try:
     import ConfigParser
@@ -41,14 +41,14 @@ def pack_traceback_to_errormsg(func):
             raise type(e)(msg)
     return wrappedFunc
 
-def log_all_uncaughtexceptions_handler(exp_type, exp_value, exp_traceback):
+def log_all_uncaught_exceptions_handler(exp_type, exp_value, exp_traceback):
     """ This handler is to override sys.excepthook to log uncaught exceptions """
     logging.error("Uncaught exception", exc_info=(exp_type, exp_value, exp_traceback))
     # call the original sys.excepthook
     sys.__excepthook__(exp_type, exp_value, exp_traceback)
 
 
-def LogMemoryErrors(func):
+def log_memory_errors(func):
     """ This is a decorator to log Memory errors """
     @wraps(func)
     def wrappedFunc(*args, **kwargs):
@@ -61,7 +61,7 @@ def LogMemoryErrors(func):
             raise
     return wrappedFunc
 
-def LoadDataCube(filelist):
+def load_data_cube(filelist):
     """ Loads the input file list in to a data cube, and return both datacube and fits header seperately.
     Input: 
          filelist : List of sorted filenames of the up-the-ramp data
@@ -83,12 +83,12 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     Returns:
          Slopeimage hdulist object, header
 """
-    HDR_INTTIME = ReadOutSoftware[Config['ReadoutSoftware']]['HDR_INTTIME']
-    HDR_NOUTPUTS = ReadOutSoftware[Config['ReadoutSoftware']]['HDR_NOUTPUTS']
+    HDR_INTTIME = READOUT_SOFTWARE[Config['ReadoutSoftware']]['HDR_INTTIME']
+    HDR_NOUTPUTS = READOUT_SOFTWARE[Config['ReadoutSoftware']]['HDR_NOUTPUTS']
     # Fix any fixes needed for raw header as well as any artifacts in DataCube
-    FixHeader_func = ReadOutSoftware[Config['ReadoutSoftware']]['FixHeader_func']
-    FixDataCube_func = ReadOutSoftware[Config['ReadoutSoftware']]['FixDataCube_func']
-    DataCube, header = LoadDataCube(UTRlist) 
+    FixHeader_func = READOUT_SOFTWARE[Config['ReadoutSoftware']]['FixHeader_func']
+    FixDataCube_func = READOUT_SOFTWARE[Config['ReadoutSoftware']]['FixDataCube_func']
+    DataCube, header = load_data_cube(UTRlist) 
     header = FixHeader_func(header)
     DataCube = FixDataCube_func(DataCube)
     time = np.array([FixHeader_func(fits.getheader(f))[HDR_INTTIME] for f in UTRlist])
@@ -104,8 +104,8 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
                                                    no_channels=header[HDR_NOUTPUTS],
                                                    do_LSQmedian_correction=Config['DoLSQmedianCorrection'])
     else:
-        DataCube = reduction.remove_bias_preservepedestal_in_cube(DataCube,
-                                                                  no_channels=header[HDR_NOUTPUTS])
+        DataCube = reduction.remove_bias_preserve_pedestal_in_cube(DataCube,
+                                                                   no_channels=header[HDR_NOUTPUTS])
 
     # Non-linearity Correction
     if Config['NonLinearCorrCoeff']:
@@ -185,7 +185,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
         logging.info('Fixing {0} CR hit slopes..'.format(TotalCRhits))
         DataCube[zip(*CR_TIJ)] = np.ma.masked  # Mask all points just after CR hit
         for t,i,j in CR_TIJ:
-            slopeimg[i,j], var = reduction.piecewise_avgSlopeVar(DataCube[:,i,j],time,redn,gain)
+            slopeimg[i,j], var = reduction.piecewise_avg_slope_var(DataCube[:,i,j],time,redn,gain)
             if Config['CalculateVarienceImage']:
                 VarImg[i,j] = var
         header['history'] = 'Cosmic Ray hits fixed before slope calculation'
@@ -262,7 +262,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
 
 # @pack_traceback_to_errormsg can be commented out when function not used in multiprocess
 @pack_traceback_to_errormsg
-@LogMemoryErrors
+@log_memory_errors
 def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFileFormat='Slope-R{0}.fits',
                          FirstNDR = 0, LastNDR = None,
                          RampFilenameString='H2RG_R{0:02}_M',
@@ -399,7 +399,7 @@ def parse_args():
 def main():
     """ Standalone Script to generate Slope images from Up the Ramp data taken using Teledyne's HxRG detector"""
     # Override the default exception hook with our custom handler
-    sys.excepthook = log_all_uncaughtexceptions_handler
+    sys.excepthook = log_all_uncaught_exceptions_handler
 
     args = parse_args()    
 
@@ -429,17 +429,17 @@ def main():
 
         # Find the number of Ramps in the input Directory
         imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
-        RampidRegexp = ReadOutSoftware[Config['ReadoutSoftware']]['RampidRegexp']
+        RampidRegexp = READOUT_SOFTWARE[Config['ReadoutSoftware']]['RampidRegexp']
         RampList = sorted(set((re.search(RampidRegexp,os.path.basename(f)).group(1) for f in imagelist))) # Ex: 45 in H2RG_R45_M01_N01.fits
         if not RampList:
             logging.info('No images to process in {0}'.format(InputDir))
             continue # skip to next directory
         noNDR = None
 
-        ExtraHeaderCalculator = ReadOutSoftware[Config['ReadoutSoftware']]['ExtraHeaderCalculations_func']
+        ExtraHeaderCalculator = READOUT_SOFTWARE[Config['ReadoutSoftware']]['ExtraHeaderCalculations_func']
 
         if args.NoNDR_Drop_G is None:
-            estimate_NoNDR_Drop_G_func = ReadOutSoftware[Config['ReadoutSoftware']]['estimate_NoNDR_Drop_G_func']
+            estimate_NoNDR_Drop_G_func = READOUT_SOFTWARE[Config['ReadoutSoftware']]['estimate_NoNDR_Drop_G_func']
             if estimate_NoNDR_Drop_G_func is not None:
                 noNDR,noDrop,noG = estimate_NoNDR_Drop_G_func(imagelist)
         else:
@@ -454,8 +454,8 @@ def main():
         else:
             ExpectedFramesPerRamp = None
 
-        RampFilenameString = ReadOutSoftware[Config['ReadoutSoftware']]['RampFilenameString']
-        FileNameSortKeyFunc = ReadOutSoftware[Config['ReadoutSoftware']]['filename_sort_func']
+        RampFilenameString = READOUT_SOFTWARE[Config['ReadoutSoftware']]['RampFilenameString']
+        FileNameSortKeyFunc = READOUT_SOFTWARE[Config['ReadoutSoftware']]['filename_sort_func']
         SlopeimageGenerator = partial(generate_slope_image,
                                       InputDir=InputDir,OutputDir=OutputDir,
                                       Config = Config,
