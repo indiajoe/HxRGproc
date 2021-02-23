@@ -24,7 +24,7 @@ def extra_header_calculations_Teledyne(header,Ramptime):
     ExtraHeader['OBSTIME'] = (header['ACQTIME'] + ((header['SEQNUM_R']*header['NRESETS']*header['FRMTIME']) + ((header['SEQNUM_R']-1)*Ramptime))/(60*60*24.0), 'Estimated Observation Time')
     # Because of this silly SIMPLE header (we need for calculating file write time), we need raw fits file header. Don't use hdulist's header.
     t = Time(datetime(*tuple([int(header.comments['SIMPLE'].split()[-1]),month2nub[header.comments['SIMPLE'].split()[-4]],
-                              int(header.comments['SIMPLE'].split()[-3])]+map(int,header.comments['SIMPLE'].split()[-2].split(':'))),tzinfo=utc_minus_four_hour))
+                              int(header.comments['SIMPLE'].split()[-3])]+list(map(int,header.comments['SIMPLE'].split()[-2].split(':')))),tzinfo=utc_minus_four_hour))
     ExtraHeader['FWTIME'] = (t.jd,'Time raw fits image was written')
 
     return ExtraHeader
