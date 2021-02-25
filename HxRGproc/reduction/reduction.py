@@ -409,7 +409,7 @@ def load_nonlinearcorr_bspline_dic(pklfilename):
     logging.info("Loading pickled Bspline corefficent dictionary: {0}".format(pklfilename))
     NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'))
     BsplineDic = {}
-    for (i,j),tck in NLcorrTCKdic.iteritems():
+    for (i,j),tck in NLcorrTCKdic.items():
         try:
             BsplineDic[i,j] = interpolate.BSpline(tck[0],tck[1],tck[2],extrapolate=True)
         except TypeError:
@@ -427,7 +427,7 @@ def apply_dic_functions(DataCube,NLcorrTCKdic):
     OutDataCube = DataCube  # Overwrite the same array to save memory
 
     # Do the Non-linearity correction
-    for (i,j),bspl in NLcorrTCKdic.iteritems():
+    for (i,j),bspl in NLcorrTCKdic.items():
         try:
             OutDataCube[:,i,j] = bspl(DataCube[:,i,j])
         except TypeError:
