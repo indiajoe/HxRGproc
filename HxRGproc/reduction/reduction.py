@@ -407,7 +407,10 @@ def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
 def load_nonlinearcorr_bspline_dic(pklfilename):
     """ Loads the pickled Bspline corefficent dictionary into a dictionary of Bsplines """
     logging.info("Loading pickled Bspline corefficent dictionary: {0}".format(pklfilename))
-    NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'))
+    try:
+        NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'))
+    except UnicodeDecodeError:
+        NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'),encoding="latin1")
     BsplineDic = {}
     for (i,j),tck in NLcorrTCKdic.items():
         try:
