@@ -95,6 +95,8 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
 
     header['PEDESVAL'] = biweight_location(DataCube[0])  # Save the pedestal value in header
 
+    pedestal_image = np.copy(DataCube[0])
+
     NoNDR = DataCube.shape[0]
     logging.info('Number of NDRs = {0}'.format(NoNDR))
     # Bias level corrections
@@ -122,11 +124,36 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
                                                              UpperThresh=None, NoOfPreFrames=NoOfFSkip+1)
 
     # Mask values above upper threshold before fitting slope
-    if Config['UpperThreshold']:
+    if (Config['UpperThreshold'] is not None) or (Config['ADCThreshold'] is not None):
         if isinstance(Config['UpperThreshold'],str):
             UpperThresh = np.load(Config['UpperThreshold'])  
-        else:
+        elif isinstance(Config['UpperThreshold'],(int,float)):
             UpperThresh = Config['UpperThreshold']
+        else:
+            logging.info('No Upper thresholding.')
+            UpperThresh = None
+
+        if isinstance(Config['ADCThreshold'],(int,float)):
+            if Config['DoPedestalSubtraction']: 
+                ADCThresh = Config['ADCThreshold'] - pedestal_image
+            else:
+                ADCThresh = Config['ADCThreshold']
+        else:
+            logging.info('No ADC thresholding.')
+            ADCThresh = None
+
+        # Combine the two threshold criteria into one
+        if ADCThresh is not None:
+            if UpperThresh is not None:
+                if (np.isscalar(UpperThresh) and np.isscalar(ADCThresh)) or (~np.isscalar(UpperThresh) and ~np.isscalar(ADCThresh)):
+                    UpperThresh = np.min([UpperThresh,ADCThresh],axis=0)
+                elif np.isscalar(ADCThresh):
+                    UpperThresh[UpperThresh>ADCThresh] = ADCThresh
+                elif np.isscalar(UpperThresh):
+                    ADCThresh[ADCThresh>UpperThresh] = UpperThresh
+            else:
+                UpperThresh = ADCThresh  # ADCThresh is the only threshold
+
         DataCube = np.ma.masked_greater(DataCube,UpperThresh)
 
         # Number of NDRs used in slope fitting after simple threshold.
