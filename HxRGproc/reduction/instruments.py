@@ -57,7 +57,7 @@ def sort_filename_key_function_HPFLinux(fname):
     """ Function which returns the key to sort HPFLinux filename """
     return tuple(map(int,re.search('hpf_(\d+?)T(\d+?)_R(\d+?)_F(\d+?).fits',os.path.basename(fname)).group(1,2,3,4)))
 
-def fix_header_function_HPFLinux(header):
+def fix_header_function_HPFLinux(header,fname=None):
     """ Funtion to fix any missing headers needed in header """
     if 'ITIME' not in header:
         try:
@@ -106,7 +106,7 @@ SupportedReadOutSoftware_for_slope = {
                        'HDR_NOUTPUTS' : 'NOUTPUTS', # Fits header for number of output channels
                        'HDR_INTTIME' : 'INTTIME', # Fits header for accumulated exposure time in each NDR
                        'filename_sort_func' : sort_filename_key_function_Teledyne,
-                       'FixHeader_func': lambda hdr: hdr, # Optional function call to fix input raw header
+                       'FixHeader_func': lambda hdr, fname=None: hdr, # Optional function call to fix input raw header
                        'FixDataCube_func': lambda Dcube: Dcube, # Optional function call to fix input Data Cube
                        'estimate_NoNDR_Drop_G_func' : estimate_NoNDR_Drops_G_Teledyne,
                        'ExtraHeaderCalculations_func' : extra_header_calculations_Teledyne},
@@ -125,7 +125,7 @@ SupportedReadOutSoftware_for_slope = {
                 'HDR_NOUTPUTS' : 'CHANNELS', # Fits header for number of output channels
                 'HDR_INTTIME' : 'ITIME', # Fits header for accumulated exposure time in each NDR
                 'filename_sort_func': sort_filename_key_function_HPFLinux,
-                'FixHeader_func': lambda hdr: hdr, # Optional function call to fix input raw header
+                'FixHeader_func': lambda hdr, fname=None: hdr, # Optional function call to fix input raw header
                 'FixDataCube_func': lambda Dcube: Dcube, # Optional function call to fix input Data Cube
                 'estimate_NoNDR_Drop_G_func':None,
                 'ExtraHeaderCalculations_func':None},

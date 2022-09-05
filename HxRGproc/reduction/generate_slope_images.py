@@ -91,7 +91,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     DataCube, header = load_data_cube(UTRlist) 
     header = FixHeader_func(header)
     DataCube = FixDataCube_func(DataCube)
-    time = np.array([FixHeader_func(fits.getheader(f))[HDR_INTTIME] for f in UTRlist])
+    time = np.array([FixHeader_func(fits.getheader(f),fname=f)[HDR_INTTIME] for f in UTRlist])
 
     header['PEDESVAL'] = biweight_location(DataCube[0])  # Save the pedestal value in header
 
