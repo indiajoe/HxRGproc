@@ -210,11 +210,12 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     if TotalCRhits < Config['MaxNoOfCRfix']:
         # ReCalculate correct slope for Cosmic ray hit points
         logging.info('Fixing {0} CR hit slopes..'.format(TotalCRhits))
-        DataCube[tuple(zip(*CR_TIJ))] = np.ma.masked  # Mask all points just after CR hit
-        for t,i,j in CR_TIJ:
-            slopeimg[i,j], var = reduction.piecewise_avg_slope_var(DataCube[:,i,j],time,redn,gain)
-            if Config['CalculateVarienceImage']:
-                VarImg[i,j] = var
+        if TotalCRhits > 0:  # Mask only if the CR_TIJ is not an empty list
+            DataCube[tuple(zip(*CR_TIJ))] = np.ma.masked  # Mask all points just after CR hit
+            for t,i,j in CR_TIJ:
+                slopeimg[i,j], var = reduction.piecewise_avg_slope_var(DataCube[:,i,j],time,redn,gain)
+                if Config['CalculateVarienceImage']:
+                    VarImg[i,j] = var
         header['history'] = 'Cosmic Ray hits fixed before slope calculation'
     else:
         logging.info('UnFixed {0} CR hits..'.format(TotalCRhits))
