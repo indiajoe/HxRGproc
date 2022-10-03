@@ -334,7 +334,10 @@ def generate_slope_image(RampNo,InputDir,OutputDir, Config, OutputFileFormat='Sl
         return None
         
     # First search for all raw files
-    UTRlistT = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits') and (RampFilenameString.format(RampNo) in os.path.basename(f))))
+    RampidRegexp = READOUT_SOFTWARE[Config['ReadoutSoftware']]['RampidRegexp']  # We will use the RampidRegexp to filter out any bad fits filenames which doesnot belong
+    UTRlistT = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if ((os.path.splitext(f)[-1] == '.fits') and \
+                                                                                  (RampFilenameString.format(RampNo) in os.path.basename(f)) and \
+                                                                                  (re.search(RampidRegexp,os.path.basename(f)) is not None))))
     UTRlist = sorted(UTRlistT,key=FilenameSortKeyFunc)
 
     if LastNDR is None:
@@ -456,8 +459,8 @@ def main():
             continue # skip to next directory
 
         # Find the number of Ramps in the input Directory
-        imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
         RampidRegexp = READOUT_SOFTWARE[Config['ReadoutSoftware']]['RampidRegexp']
+        imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if ((os.path.splitext(f)[-1] == '.fits') and (re.search(RampidRegexp,os.path.basename(f)) is not None))))
         RampList = sorted(set((re.search(RampidRegexp,os.path.basename(f)).group(1) for f in imagelist))) # Ex: 45 in H2RG_R45_M01_N01.fits
         if not RampList:
             logging.info('No images to process in {0}'.format(InputDir))

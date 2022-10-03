@@ -138,8 +138,9 @@ def main():
         InputDir = os.path.join(InputDir,READOUT_SOFTWARE[inst]['InputSubDir']) # Append any redundant input subdirectory to be added
 
         # Find the number of Ramps in the input Directory
-        imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if (os.path.splitext(f)[-1] == '.fits')))
-        RampList = sorted(set((re.search(READOUT_SOFTWARE[inst]['RampidRegexp'],os.path.basename(f)).group(1) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
+        RampidRegexp = READOUT_SOFTWARE[inst]['RampidRegexp']
+        imagelist = sorted((os.path.join(InputDir,f) for f in os.listdir(InputDir) if ((os.path.splitext(f)[-1] == '.fits') and (re.search(RampidRegexp,os.path.basename(f)) is not None))))
+        RampList = sorted(set((re.search(RampidRegexp,os.path.basename(f)).group(1) for f in imagelist))) # 45 in H2RG_R45_M01_N01.fits
         if not RampList:
             logging.info('No images to process in {0}'.format(InputDir))
             continue # skip to next directory
