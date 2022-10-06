@@ -377,6 +377,8 @@ def parse_str_to_types(string):
         return False
     elif string == 'None':
         return None
+    elif string == '""':
+        return ""
     elif string.lstrip('-+ ').isdigit():
         return int(string)
     elif (string[0] in '[(') and (string[-1] in ')]'): # Recursively parse a list/tuple into a list
