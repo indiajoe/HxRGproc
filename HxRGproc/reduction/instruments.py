@@ -91,9 +91,32 @@ def fix_datacube_function_HPFLinux(DataCube):
             DataCube[:,i,j][ZeroMask[:,i,j]] = f(t[ZeroMask[:,i,j]])
 
     return DataCube
-##########################################################################
+#####################################################################
+#####################################################################
+#### Functions specific to reduce SpecTANSPEC software data
+#####################################################################
+
+def sort_filename_key_function_SpecTANSPEC(fname):
+    """ Function which returns the key to sort SpecTANSPEC filename """
+    return tuple(map(int,re.search('.*-(\d+?)\.Z\.(\d+?)\.fits',os.path.basename(fname)).group(1,2)))
 
 
+def fix_header_function_SpecTANSPEC(header,fname=None):
+   """Function to fix any missing headers needed in header"""
+   if 'CHANNELS' not in header:
+           header['CHANNELS'] = 4
+   if ('NDRITIME' not in header) or (header['NDRITIME'] == 0):
+       FrameTime = 5.253  #Time taken for each readout.
+       print(fname)
+       Frame_Number = re.search('.*\.Z\.(\d+?)\.fits',os.path.basename(fname)).group(1)
+       time = int(Frame_Number) * FrameTime
+       header['NDRITIME'] = time
+   return header
+
+def fix_datacube_function_SpecTANSPEC(DataCube):
+    """Fixes the zero readout rows in datacube"""
+    DataCube = 65536-DataCube
+    return DataCube
 
 ####################################################################
 # Register functions which are specific to each readout software output in dictionary below
@@ -129,9 +152,16 @@ SupportedReadOutSoftware_for_slope = {
                 'FixDataCube_func': lambda Dcube: Dcube, # Optional function call to fix input Data Cube
                 'estimate_NoNDR_Drop_G_func':None,
                 'ExtraHeaderCalculations_func':None},
-
+    'SpecTANSPEC':{'RampFilenameString':'{0}.Z.',#Inpui filename structure with Ramp id substitution
+                   'RampidRegexp':'(.*?-\d*?)\.Z\.\d*\.fits',# Regexp to extract unique Ramp id from filename
+                   'HDR_NOUTPUTS' : 'CHANNELS', # Fits header for number of output channels
+                   'HDR_INTTIME' : 'NDRITIME', # Fits header for accumulated exposure time in each NDR
+                   'filename_sort_func': sort_filename_key_function_SpecTANSPEC,
+                   'FixHeader_func': fix_header_function_SpecTANSPEC,
+                   'FixDataCube_func': fix_datacube_function_SpecTANSPEC,
+                   'estimate_NoNDR_Drop_G_func': None,
+                   'ExtraHeaderCalculations_func': None}
 }
-
 
 ####################################################################
 # Register functions which are specific to each readout software output in dictionary below
@@ -154,5 +184,10 @@ SupportedReadOutSoftware_for_cds = {
                 'RampidRegexp' : 'hpf_(.*_R\d*?)_F.*fits', # Regexp to extract unique Ramp id from filename
                 'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
                 'filename_sort_func': sort_filename_key_function_HPFLinux,
-                'estimate_NoNDR_Drop_G_func':None}
+                'estimate_NoNDR_Drop_G_func':None},
+    'SpecTANSPEC':{'RampFilenameString':'-{0}.Z.',#Inpui filename structure with Ramp id substitution
+                   'RampidRegexp':'.*-(\d*?)\.Z\.\d*?\.fits',# Regexp to extract unique Ramp id from filename
+                   'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
+                   'filename_sort_func':sort_filename_key_function_SpecTANSPEC,
+                   'estimate_NoNDR_Drop_G_func':None}
 }
