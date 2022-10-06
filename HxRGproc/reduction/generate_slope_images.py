@@ -89,7 +89,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     FixHeader_func = READOUT_SOFTWARE[Config['ReadoutSoftware']]['FixHeader_func']
     FixDataCube_func = READOUT_SOFTWARE[Config['ReadoutSoftware']]['FixDataCube_func']
     DataCube, header = load_data_cube(UTRlist) 
-    header = FixHeader_func(header)
+    header = FixHeader_func(header,fname=UTRlist[-1])
     DataCube = FixDataCube_func(DataCube)
     time = np.array([FixHeader_func(fits.getheader(f),fname=f)[HDR_INTTIME] for f in UTRlist])
 
