@@ -201,7 +201,7 @@ def subtract_median_bias_residue(DataCube,no_channels=32,time=None):
     return np.dstack(CorrectedCubes)
         
 
-def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correction=-99999):
+def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correction=-99999,vertical_smooth_window=15):
     """ Returns the data cube after removing variable biases from data cube.
     Input:
         DataCube: The 3D Raw readout Data Cube from an up-the-ramp readout of HxRG.
@@ -211,6 +211,8 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
                         if the median of the last frame is less then do_LSQmedian_correction value.
                           Hint: Do this only for data which does not saturate in more than 40% of half of each channel.
                           Also only for images where more than 40% of pixels have steady linear flux incedence.
+         vertical_smooth_window (odd +ve int): size of the window for smoothing the vertical reference pixel.
+
     Output:
        BiasCorrectedDataCube: 3D data cube after correcting all biases.
     
@@ -226,7 +228,7 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     
     # Step 2: Estimate bias values from top and bottom reference pixels and subtract them for each channel strip.
     # Step 3: Estimate bias value fluctuation in Vertical direction during the readout time, and subtract them from each strip.
-    DataCube = np.array([subtract_reference_pixels(ndr,no_channels=no_channels) for ndr in DataCube])
+    DataCube = np.array([subtract_reference_pixels(ndr,no_channels=no_channels,vertical_smooth_window=vertical_smooth_window) for ndr in DataCube])
 
     DataCube[0,:,:] = 0  # Just incase it becomes nan in bias subtraction
 
@@ -239,11 +241,13 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     return DataCube
 
 
-def remove_bias_preserve_pedestal_in_cube(DataCube,no_channels=32):
+def remove_bias_preserve_pedestal_in_cube(DataCube,no_channels=32,vertical_smooth_window=15):
     """ Returns the data cube after removing only variable biases from data cube. And preserves the pedestal bias.
     Input:
         DataCube: The 3D Raw readout Data Cube from an up-the-ramp readout of HxRG.
         no_channels: Number of channels used in readout. (default:32)
+        vertical_smooth_window (odd +ve int): size of the window for smoothing the vertical reference pixel.
+
     Output:
        VBiasCorrectedDataCube: 3D data cube after removing only the variable biases, preserving pedestal.
     
@@ -254,7 +258,7 @@ def remove_bias_preserve_pedestal_in_cube(DataCube,no_channels=32):
 
     # Step 1: Estimate bias values from top and bottom reference pixels and subtract them for each channel strip.
     # Step 2: Estimate bias value fluctuation in Vertical direction during the readout time, and subtract them from each strip.
-    cleanndrArray = np.array([subtract_reference_pixels(ndr,no_channels=no_channels, statfunc=np.mean) for ndr in DataCube])
+    cleanndrArray = np.array([subtract_reference_pixels(ndr,no_channels=no_channels, statfunc=np.mean,vertical_smooth_window=vertical_smooth_window) for ndr in DataCube])
     
     # Now calculate mean of all the Bias corrections to obtain pedestal
     Pedestal = np.mean(DataCube - cleanndrArray, axis=0)

@@ -104,10 +104,12 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
         logging.info('Subtracted Pedestal')
         DataCube = reduction.remove_biases_in_cube(DataCube,time=time,
                                                    no_channels=header[HDR_NOUTPUTS],
-                                                   do_LSQmedian_correction=Config['DoLSQmedianCorrection'])
+                                                   do_LSQmedian_correction=Config['DoLSQmedianCorrection'],
+                                                   vertical_smooth_window=Config['VerticalReferenceSmoothWindow'])
     else:
         DataCube = reduction.remove_bias_preserve_pedestal_in_cube(DataCube,
-                                                                   no_channels=header[HDR_NOUTPUTS])
+                                                                   no_channels=header[HDR_NOUTPUTS],
+                                                                   vertical_smooth_window=Config['VerticalReferenceSmoothWindow'])
 
     # Non-linearity Correction
     if Config['NonLinearCorrCoeff']:
@@ -225,6 +227,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
     header['ITIME'] = time[-1]  # Update the ITIME in the header of the first image with the last NDR's
     header['PEDSUB'] = (Config['DoPedestalSubtraction'], 'T/F Did Pedestal Subtraction')
     header['MLSQBIA'] = (Config['DoLSQmedianCorrection'], 'UpperThreshold to do LSQ median bias algo')
+    header['VREFSMO'] = (Config['VerticalReferenceSmoothWindow'], 'Vertical Reference Smoothing Window')
     header['NLCORR'] = (os.path.basename(str(Config['NonLinearCorrCoeff'])), 'NonLinearCorr Coeff File')
     header['UTHRESH'] = (os.path.basename(str(Config['UpperThreshold'])), 'UpperThreshold Mask value/file')
     header['CUNITS'] = ('e-/sec','Units of the counts in image')
