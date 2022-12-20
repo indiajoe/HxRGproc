@@ -107,7 +107,6 @@ def fix_header_function_SpecTANSPEC(header,fname=None):
            header['CHANNELS'] = 4
    if ('NDRITIME' not in header) or (header['NDRITIME'] == 0):
        FrameTime = 5.253  #Time taken for each readout.
-       print(fname)
        Frame_Number = re.search('.*\.Z\.(\d+?)\.fits',os.path.basename(fname)).group(1)
        time = int(Frame_Number) * FrameTime
        header['NDRITIME'] = time
