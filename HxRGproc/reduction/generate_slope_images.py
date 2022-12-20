@@ -147,7 +147,7 @@ def calculate_slope_image(UTRlist,Config,NoOfFSkip=0):
         # Combine the two threshold criteria into one
         if ADCThresh is not None:
             if UpperThresh is not None:
-                if (np.isscalar(UpperThresh) and np.isscalar(ADCThresh)) or (~np.isscalar(UpperThresh) and ~np.isscalar(ADCThresh)):
+                if (np.isscalar(UpperThresh) and np.isscalar(ADCThresh)) or ( (not np.isscalar(UpperThresh)) and  (not np.isscalar(ADCThresh))):
                     UpperThresh = np.min([UpperThresh,ADCThresh],axis=0)
                 elif np.isscalar(ADCThresh):
                     UpperThresh[UpperThresh>ADCThresh] = ADCThresh
