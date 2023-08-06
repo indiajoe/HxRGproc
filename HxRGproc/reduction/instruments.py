@@ -223,12 +223,12 @@ SupportedReadOutSoftware_for_cds = {
                 'estimate_NoNDR_Drop_G_func':None},
     'SpecTANSPEC':{'RampFilenameString':'-{0}.Z.',#Inpui filename structure with Ramp id substitution
                    'RampidRegexp':'.*-(\d*?)\.Z\.\d*?\.fits',# Regexp to extract unique Ramp id from filename
-                   'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
+                   'InputSubDir' : '', # Append any redundant input subdirectory to be added
                    'filename_sort_func':sort_filename_key_function_SpecTANSPEC,
                    'estimate_NoNDR_Drop_G_func':None},
     'TIRSPEC':{'RampFilenameString':'-{0}.',#Inpui filename structure with Ramp id substitution
                    'RampidRegexp':'.*-(\d*?)-\d*?\.fits',# Regexp to extract unique Ramp id from filename
-                   'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
+                   'InputSubDir' : '', # Append any redundant input subdirectory to be added
                    'filename_sort_func':sort_filename_key_function_TIRSPEC,
                    'estimate_NoNDR_Drop_G_func':None}
 }
