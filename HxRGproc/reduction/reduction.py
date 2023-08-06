@@ -218,8 +218,8 @@ def remove_biases_in_cube(DataCube,no_channels=32,time=None,do_LSQmedian_correct
     
     """
     # Convert to float, just incase it is something else like uint
-    if DataCube.dtype not in [np.float, np.float_, np.float16, np.float32, np.float64, np.float128]:
-        DataCube = DataCube.astype(np.float)  
+    if DataCube.dtype not in [float, np.float16, np.float32, np.float64, np.float128]:
+        DataCube = DataCube.astype(np.float32)
 
     # Step 1: Subtract the pedestal bias levels.
     # Removing these first is important to improve the accuracy of estimates of 
@@ -253,8 +253,8 @@ def remove_bias_preserve_pedestal_in_cube(DataCube,no_channels=32,vertical_smoot
     
     """
     # Convert to float, just incase it is something else like uint
-    if DataCube.dtype not in [np.float, np.float_, np.float16, np.float32, np.float64, np.float128]:
-        DataCube = DataCube.astype(np.float)  
+    if DataCube.dtype not in [float, np.float16, np.float32, np.float64, np.float128]:
+        DataCube = DataCube.astype(np.float32)
 
     # Step 1: Estimate bias values from top and bottom reference pixels and subtract them for each channel strip.
     # Step 2: Estimate bias value fluctuation in Vertical direction during the readout time, and subtract them from each strip.
