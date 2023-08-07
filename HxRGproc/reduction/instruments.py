@@ -188,7 +188,7 @@ SupportedReadOutSoftware_for_slope = {
                    'estimate_NoNDR_Drop_G_func': None,
                    'ExtraHeaderCalculations_func': None},
     'TIRSPEC':{'RampFilenameString':'{0}-',#Input filename structure with Ramp id substitution
-                   'RampidRegexp':'(.*?-\d*?)-\.\d*\.fits',# Regexp to extract unique Ramp id from filename
+                   'RampidRegexp':'(.*?-\d*?)-debug-\.\d*\.fits',# Regexp to extract unique Ramp id from filename
                    'HDR_NOUTPUTS' : 'CHANNELS', # Fits header for number of output channels
                    'HDR_INTTIME' : 'NDRITIME', # Fits header for accumulated exposure time in each NDR
                    'filename_sort_func': sort_filename_key_function_TIRSPEC,
