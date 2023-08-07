@@ -123,8 +123,8 @@ def fix_datacube_function_SpecTANSPEC(DataCube):
 #####################################################################
 
 def sort_filename_key_function_TIRSPEC(fname):
-    """ Function which returns the key to sort SpecTANSPEC filename """
-    return tuple(map(int,re.search('.*-(\d+?)-(\d+?)\.fits',os.path.basename(fname)).group(1,2)))
+    """ Function which returns the key to sort TIRSPEC filename """
+    return tuple(map(int,re.search('.*-(\d+?)-debug-(\d+?)\.fits',os.path.basename(fname)).group(1,2)))
 
 
 def fix_header_function_TIRSPEC(header,fname=None):
@@ -132,8 +132,8 @@ def fix_header_function_TIRSPEC(header,fname=None):
    if 'CHANNELS' not in header:
            header['CHANNELS'] = 16
    if ('NDRITIME' not in header) or (header['NDRITIME'] == 0):
-       FrameTime = header['ITIME']  #Time taken for each readout.
-       Frame_Number = re.search('.*(\d+?)\.fits',os.path.basename(fname)).group(1)
+       FrameTime = header['NDRRDTM']  #Time taken for each readout.
+       Frame_Number = re.search('.*debug-(\d+?)\.fits',os.path.basename(fname)).group(1)
        time = int(Frame_Number) * FrameTime
        header['NDRITIME'] = time
    return header
@@ -187,7 +187,7 @@ SupportedReadOutSoftware_for_slope = {
                    'FixDataCube_func': fix_datacube_function_SpecTANSPEC,
                    'estimate_NoNDR_Drop_G_func': None,
                    'ExtraHeaderCalculations_func': None},
-    'TIRSPEC':{'RampFilenameString':'{0}.',#Input filename structure with Ramp id substitution
+    'TIRSPEC':{'RampFilenameString':'{0}-',#Input filename structure with Ramp id substitution
                    'RampidRegexp':'(.*?-\d*?)-\.\d*\.fits',# Regexp to extract unique Ramp id from filename
                    'HDR_NOUTPUTS' : 'CHANNELS', # Fits header for number of output channels
                    'HDR_INTTIME' : 'NDRITIME', # Fits header for accumulated exposure time in each NDR
@@ -221,13 +221,13 @@ SupportedReadOutSoftware_for_cds = {
                 'InputSubDir' : 'fits', # Append any redundant input subdirectory to be added
                 'filename_sort_func': sort_filename_key_function_HPFLinux,
                 'estimate_NoNDR_Drop_G_func':None},
-    'SpecTANSPEC':{'RampFilenameString':'-{0}.Z.',#Inpui filename structure with Ramp id substitution
+    'SpecTANSPEC':{'RampFilenameString':'{0}.Z.',#Inpui filename structure with Ramp id substitution
                    'RampidRegexp':'.*-(\d*?)\.Z\.\d*?\.fits',# Regexp to extract unique Ramp id from filename
                    'InputSubDir' : '', # Append any redundant input subdirectory to be added
                    'filename_sort_func':sort_filename_key_function_SpecTANSPEC,
                    'estimate_NoNDR_Drop_G_func':None},
-    'TIRSPEC':{'RampFilenameString':'-{0}.',#Inpui filename structure with Ramp id substitution
-                   'RampidRegexp':'.*-(\d*?)-\d*?\.fits',# Regexp to extract unique Ramp id from filename
+    'TIRSPEC':{'RampFilenameString':'{0}-',#Inpui filename structure with Ramp id substitution
+                   'RampidRegexp':'(.*?-\d*?)-debug-\d*?\.fits',# Regexp to extract unique Ramp id from filename
                    'InputSubDir' : '', # Append any redundant input subdirectory to be added
                    'filename_sort_func':sort_filename_key_function_TIRSPEC,
                    'estimate_NoNDR_Drop_G_func':None}
