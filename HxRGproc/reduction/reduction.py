@@ -410,22 +410,43 @@ def apply_nonlinearcorr_polynomial(DataCube,NLcorrCoeff,UpperThresh=None):
 
 @lru_cache(maxsize=1)
 def load_nonlinearcorr_bspline_dic(pklfilename):
-    """ Loads the pickled Bspline corefficent dictionary into a dictionary of Bsplines """
+    """ Loads the pickled Bspline corefficent dictionary into a dictionary of Bsplines
+    Expected format of the bspline_dic
+
+    bspline_dic = {('default','default'): (t,c,k), # (Optional): Sets the default spline correction for pixels
+                   (i,j) : None, # (Optional) : These pixels will get corrected by the ('default','default') spline, if and only if the above keyword is present. Otherwise no correction.
+                   (i,j) : (t,c,k), # (Optional) : These pixels will get corrected by the custom pixel spline
+                  }
+    Note: Any (i,j) pixel which is not part of the bspline_dic will have no spline correction applied.
+
+    Returns:
+           BsplineDic : Dictionary with pixel coordinates as the key and the corresponding Bspline model as the value.
+                        (default,default) keyword will not be present in this output dictionary to keep all the keys as coordinates alone (i,j)
+    """
     logging.info("Loading pickled Bspline corefficent dictionary: {0}".format(pklfilename))
     try:
         NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'))
     except UnicodeDecodeError:
         NLcorrTCKdic = cPickle.load(open(pklfilename,'rb'),encoding="latin1")
+
+    # Check whether there is a ('default','default') keyword for all the pixels without special NL correction
+    try:
+        default_tck = NLcorrTCKdic[('default','default')]
+        default_bspline = interpolate.BSpline(default_tck[0],default_tck[1],default_tck[2],extrapolate=True)
+    except KeyError:
+        default_bspline = None  # Set this to None
+
     BsplineDic = {}
     for (i,j),tck in NLcorrTCKdic.items():
-        try:
-            BsplineDic[i,j] = interpolate.BSpline(tck[0],tck[1],tck[2],extrapolate=True)
-        except TypeError:
-            # tck might be None for pixels with no corrections
-            BsplineDic[i,j] = None
-        except ValueError:
-            logging.error("Insufficent coeffs for {0},{1}: {2}".format(i,j,tck))
-            BsplineDic[i,j] = None
+        if isinstance(i,int) and isinstance(j,int) : # Only return dictionary with pixel coordinates, not the 'default' keyword in it.
+            try:
+                BsplineDic[i,j] = interpolate.BSpline(tck[0],tck[1],tck[2],extrapolate=True)
+            except TypeError:
+                # tck might be None for pixels with no corrections, apply only if the (default,default) exisits
+                BsplineDic[i,j] = default_bspline #None
+            except ValueError:
+                logging.error("Insufficent coeffs for {0},{1}: {2}".format(i,j,tck))
+                BsplineDic[i,j] = default_bspline #None
 
     return BsplineDic
             
