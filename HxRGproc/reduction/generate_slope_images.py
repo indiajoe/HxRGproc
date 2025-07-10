@@ -21,10 +21,10 @@ from . import reduction
 from .instruments import SupportedReadOutSoftware_for_slope as READOUT_SOFTWARE
 
 try:
-    import ConfigParser
+    from ConfigParser import SafeConfigParser
     from functools32 import wraps, partial
 except ModuleNotFoundError:  # Python 3 environment
-    import configparser as ConfigParser
+    from configparser import ConfigParser as SafeConfigParser
     from functools import wraps, partial
 
 
@@ -396,7 +396,7 @@ def parse_str_to_types(string):
 
 def create_configdict_from_file(configfilename):
     """ Returns a configuration object by loading the config file """
-    Configloader = ConfigParser.SafeConfigParser()
+    Configloader = SafeConfigParser()
     Configloader.optionxform = str  # preserve the Case sensitivity of keys
     Configloader.read(configfilename)
     # Create a Config Dictionary
