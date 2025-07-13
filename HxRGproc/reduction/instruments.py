@@ -140,7 +140,7 @@ def fix_header_function_TIRSPEC(header,fname=None):
 
 def fix_datacube_function_TIRSPEC(DataCube):
     """Fixes the zero readout rows in datacube"""
-    DataCube = 65536-DataCube
+    DataCube = 65536-DataCube.astype(np.float32)
     return DataCube
 
 
