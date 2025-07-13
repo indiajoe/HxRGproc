@@ -114,7 +114,7 @@ def fix_header_function_SpecTANSPEC(header,fname=None):
 
 def fix_datacube_function_SpecTANSPEC(DataCube):
     """Fixes the zero readout rows in datacube"""
-    DataCube = 65536-DataCube
+    DataCube = 65536-DataCube.astype(np.float32)
     return DataCube
 
 #####################################################################
